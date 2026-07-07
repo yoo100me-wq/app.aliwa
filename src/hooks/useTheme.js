@@ -1,0 +1,16 @@
+import { useState, useEffect } from 'react'
+
+export default function useTheme() {
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('aliwa-theme')
+    if (saved) return saved === 'dark'
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    localStorage.setItem('aliwa-theme', dark ? 'dark' : 'light')
+  }, [dark])
+
+  return [dark, () => setDark(!dark)]
+}

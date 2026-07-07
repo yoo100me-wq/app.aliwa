@@ -1,0 +1,33 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# package-lock.json no se commitea: generado en Windows queda incompleto para
+# la rama wasm de @tailwindcss/oxide (faltan @emnapi/core y @emnapi/runtime de
+# Linux) y rompe `npm ci` en el build de Cloudflare. Sin lock, el CI usa
+# `npm install` y resuelve bien en Linux. Regenerar un lock correcto en Linux/CI
+# si se quiere reproducibilidad exacta.
+package-lock.json
+.env
+.env.*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
