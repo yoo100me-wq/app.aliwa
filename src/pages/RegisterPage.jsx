@@ -1,17 +1,26 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import Icon from '../components/shared/Icon'
 import AliwaIcon from '../components/shared/AliwaIcon'
 import { apiFetch } from '../utils/api'
-import { useT } from '../i18n'
+import useTheme from '../hooks/useTheme'
+import { useT, otherLangPath } from '../i18n'
+
+// Sitio de marketing (landing). El logo lleva de vuelta ahí.
+const MARKETING_URL = 'https://aliwa.mx'
 
 const planSlugs = ['basico', 'profesional', 'business']
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [dark, toggleDark] = useTheme()
   const { lang, t } = useT()
+  const isEn = lang === 'en'
+  const cambiarIdioma = () => navigate(otherLangPath(location.pathname))
   const tr = t.register
-  const home = lang === 'en' ? '/en' : '/'
+  // El logo vuelve a la landing (aliwa.mx), preservando idioma
+  const home = isEn ? `${MARKETING_URL}/en` : MARKETING_URL
   const loginPath = lang === 'en' ? '/en/login' : '/login'
   const planes = planSlugs.map((slug, i) => ({ slug, ...tr.plans[i] }))
   const [searchParams] = useSearchParams()
@@ -71,6 +80,8 @@ export default function RegisterPage() {
         body: JSON.stringify({ email, codigo, password, nombre, apellido, plan }),
       })
       if (res.ok) {
+        // El dashboard hereda el idioma con el que se hizo el registro
+        try { localStorage.setItem('aliwa-lang', lang) } catch { /* sin storage */ }
         navigate('/dashboard')
       } else {
         setError(data.error || tr.errCreate)
@@ -101,12 +112,30 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Idioma + claro/oscuro */}
+      <div className="fixed top-4 right-4 z-10 flex items-center gap-1">
+        <button
+          onClick={cambiarIdioma}
+          title={isEn ? 'Cambiar a español' : 'Switch to English'}
+          className="inline-flex items-center gap-1 text-on-surface-variant hover:text-on-surface px-2.5 py-2 rounded-xl font-display text-sm font-semibold transition-colors hover:bg-surface-container-high/50"
+        >
+          <Icon name="language" className="text-[18px] leading-none" />
+          {isEn ? 'ES' : 'EN'}
+        </button>
+        <button
+          onClick={toggleDark}
+          title={dark ? (isEn ? 'Light mode' : 'Modo claro') : (isEn ? 'Dark mode' : 'Modo oscuro')}
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors"
+        >
+          <Icon name={dark ? 'light_mode' : 'dark_mode'} className="text-[18px] leading-none" />
+        </button>
+      </div>
       {/* Left - Form */}
       <div className="flex-1 flex items-center justify-center px-6 md:px-10">
         <div className="w-full max-w-[400px]">
           <a href={home} className="inline-flex items-center gap-2.5 mb-16">
             <AliwaIcon size={40} />
-            <span className="text-2xl font-logo font-bold text-primary">Aliwa</span>
+            <span className="text-2xl font-logo font-bold text-primary dark:text-on-background">Aliwa</span>
           </a>
 
           {/* Step indicator */}
@@ -129,7 +158,7 @@ export default function RegisterPage() {
           </p>
 
           {error && (
-            <div className="mb-6 p-4 rounded-2xl bg-red-500/10 text-red-400 text-sm font-display">
+            <div className="mb-6 p-4 rounded-2xl bg-error/10 text-error text-sm font-display">
               {error}
             </div>
           )}
@@ -146,7 +175,7 @@ export default function RegisterPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={tr.emailPlaceholder}
                   autoFocus
-                  className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
             )}
@@ -163,7 +192,7 @@ export default function RegisterPage() {
                   placeholder="000000"
                   autoFocus
                   maxLength={6}
-                  className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all text-center tracking-[0.5em] text-lg"
+                  className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all text-center tracking-[0.5em] text-lg"
                 />
                 <button
                   type="button"
@@ -181,19 +210,19 @@ export default function RegisterPage() {
                   <div>
                     <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-2 tracking-wide uppercase">{tr.firstNameLabel}</label>
                     <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder={tr.firstNamePlaceholder} autoFocus
-                      className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                   </div>
                   <div>
                     <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-2 tracking-wide uppercase">{tr.lastNameLabel}</label>
                     <input type="text" value={apellido} onChange={(e) => setApellido(e.target.value)} placeholder={tr.lastNamePlaceholder}
-                      className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-2 tracking-wide uppercase">{tr.passwordLabel}</label>
                   <div className="relative">
                     <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr.passwordPlaceholder}
-                      className="w-full bg-surface-container rounded-2xl px-5 py-3.5 pr-12 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 pr-12 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors">
                       <Icon name={showPassword ? 'visibility_off' : 'visibility'} className="text-[20px]" />
@@ -203,7 +232,7 @@ export default function RegisterPage() {
                 <div>
                   <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-2 tracking-wide uppercase">{tr.confirmPasswordLabel}</label>
                   <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={tr.confirmPasswordPlaceholder}
-                    className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                    className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-2 tracking-wide uppercase">{tr.planLabel}</label>
@@ -254,7 +283,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Right - Visual */}
-      <div className="hidden lg:flex flex-1 items-center justify-center bg-surface-container rounded-l-[32px] relative overflow-hidden">
+      <div className="hidden lg:flex flex-1 items-center justify-center bg-surface-container-high/40 rounded-l-[32px] relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-accent/8 blur-[100px]"></div>
         <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-purple/6 blur-[100px]"></div>
         <div className="relative z-10 max-w-md px-12 text-center">

@@ -12,7 +12,20 @@
     <meta property="og:url" content="https://aliwa.mx" />
     <meta property="og:type" content="website" />
     <meta property="fb:app_id" content="997289503159629" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+    <script>
+      // Aplica el tema ANTES del primer render (evita flash y hace que
+      // login/registro respeten la preferencia guardada o la del sistema).
+      (function () {
+        try {
+          var guardado = localStorage.getItem('aliwa-theme')
+          var oscuro = guardado
+            ? guardado === 'dark'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+          document.documentElement.classList.toggle('dark', oscuro)
+        } catch (e) { /* sin localStorage: se queda en claro */ }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

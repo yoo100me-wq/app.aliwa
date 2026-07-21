@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react'
 import { apiFetch } from '../../utils/api'
+import { useLang } from '../../i18n-app'
 import Icon from '../shared/Icon'
-
-const ROL_LABEL = {
-  owner: 'Propietario',
-  admin: 'Administrador',
-  agent: 'Agente',
-  usuario: 'Agente',
-}
 
 function iniciales(nombre) {
   if (!nombre) return '?'
@@ -22,6 +16,9 @@ const label = 'block text-[11px] font-display font-semibold text-on-surface-vari
 const FORM_VACIO = { email: '', nombre: '', apellido: '', rol: 'agent' }
 
 export default function EquipoSection({ limite, usuarioActualId }) {
+  const { t } = useLang()
+  const te = t.equipo
+  const ROL_LABEL = te.roles
   const [usuarios, setUsuarios] = useState([])
   const [invitaciones, setInvitaciones] = useState([])
   const [cargando, setCargando] = useState(true)
@@ -56,14 +53,14 @@ export default function EquipoSection({ limite, usuarioActualId }) {
       })
       if (res.ok) {
         setInvitaciones((prev) => [data, ...prev])
-        setAviso(`Enviamos un correo de confirmación a ${form.email}.`)
+        setAviso(te.avisoInvitacion(form.email))
         setForm(FORM_VACIO)
         setAbierto(false)
       } else {
-        setError(data?.error || 'No se pudo enviar la invitación')
+        setError(data?.error || te.errInvitar)
       }
     } catch {
-      setError('Error de conexión')
+      setError(te.errConexion)
     } finally {
       setGuardando(false)
     }
@@ -76,30 +73,30 @@ export default function EquipoSection({ limite, usuarioActualId }) {
 
   const reenviarInvitacion = async (id, email) => {
     const { res } = await apiFetch(`/api/usuarios/invitaciones/${id}/reenviar/`, { method: 'POST' })
-    setAviso(res.ok ? `Reenviamos la invitación a ${email}.` : '')
-    if (!res.ok) setError('No se pudo reenviar la invitación')
+    setAviso(res.ok ? te.avisoReenvio(email) : '')
+    if (!res.ok) setError(te.errReenviar)
   }
 
   return (
-    <div className="bg-surface-container rounded-2xl p-5 max-w-2xl">
+    <div className="border border-outline-variant bg-surface-container rounded-2xl p-5 max-w-2xl">
       {/* Encabezado con conteo y botón */}
       <div className="flex items-center justify-between gap-4 mb-4">
         <div>
-          <h3 className="font-display font-bold text-[15px]">Usuarios del equipo</h3>
+          <h3 className="font-display font-bold text-[15px]">{te.titulo}</h3>
           <p className="text-[12px] text-on-surface-variant mt-0.5">
             {lim != null
-              ? `${total} de ${lim} usuarios (incluye invitaciones pendientes)`
-              : `${total} ${total === 1 ? 'usuario' : 'usuarios'}`}
+              ? te.conteoConLimite(total, lim)
+              : te.conteoSinLimite(total)}
           </p>
         </div>
         <button
           onClick={() => !alLimite && setAbierto((v) => !v)}
           disabled={alLimite}
-          title={alLimite ? 'Alcanzaste el límite de tu plan' : 'Invitar usuario'}
+          title={alLimite ? te.limiteAlcanzadoTitle : te.invitarUsuario}
           className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Icon name={abierto ? 'close' : 'person_add'} className="text-[16px] leading-none" />
-          {abierto ? 'Cancelar' : 'Invitar usuario'}
+          {abierto ? te.cancelar : te.invitarUsuario}
         </button>
       </div>
 
@@ -125,48 +122,47 @@ export default function EquipoSection({ limite, usuarioActualId }) {
         <div className="bg-surface-container-lowest rounded-xl p-4 mb-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={label}>Nombre</label>
-              <input className={campo} value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Nombre" />
+              <label className={label}>{te.nombre}</label>
+              <input className={campo} value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder={te.phNombre} />
             </div>
             <div>
-              <label className={label}>Apellido</label>
-              <input className={campo} value={form.apellido} onChange={(e) => set('apellido', e.target.value)} placeholder="Apellido" />
+              <label className={label}>{te.apellido}</label>
+              <input className={campo} value={form.apellido} onChange={(e) => set('apellido', e.target.value)} placeholder={te.phApellido} />
             </div>
           </div>
           <div>
-            <label className={label}>Correo</label>
-            <input type="email" className={campo} value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="correo@ejemplo.com" />
+            <label className={label}>{te.correo}</label>
+            <input type="email" className={campo} value={form.email} onChange={(e) => set('email', e.target.value)} placeholder={te.phCorreo} />
           </div>
           <div>
-            <label className={label}>Rol</label>
+            <label className={label}>{te.rol}</label>
             <select className={campo} value={form.rol} onChange={(e) => set('rol', e.target.value)}>
-              <option value="agent">Agente</option>
-              <option value="admin">Administrador</option>
+              <option value="agent">{te.optAgente}</option>
+              <option value="admin">{te.optAdmin}</option>
             </select>
           </div>
           {error && <p className="text-[12px] text-error font-display">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={() => { setAbierto(false); setError('') }} className="px-3 py-1.5 text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors">
-              Cancelar
+              {te.cancelar}
             </button>
             <button
               onClick={invitar}
               disabled={guardando}
               className="px-4 py-1.5 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50"
             >
-              {guardando ? 'Enviando...' : 'Enviar invitación'}
+              {guardando ? te.enviando : te.enviarInvitacion}
             </button>
           </div>
           <p className="text-[11px] text-on-surface-variant">
-            Le enviaremos un correo de confirmación. Su cuenta se crea cuando confirme, y ahí recibirá
-            su usuario y contraseña temporal con el enlace de acceso.
+            {te.notaInvitacion}
           </p>
         </div>
       )}
 
       {/* Lista de usuarios existentes + invitaciones pendientes */}
       {cargando ? (
-        <div className="py-8 text-center text-[13px] text-on-surface-variant">Cargando...</div>
+        <div className="py-8 text-center text-[13px] text-on-surface-variant">{te.cargando}</div>
       ) : (
         <div className="space-y-1">
           {usuarios.map((u) => (
@@ -178,7 +174,7 @@ export default function EquipoSection({ limite, usuarioActualId }) {
                 <div className="flex items-center gap-2">
                   <span className="font-display font-semibold text-[13px] truncate">{u.nombre}</span>
                   {u.id === usuarioActualId && (
-                    <span className="text-[10px] font-display font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">Tú</span>
+                    <span className="text-[10px] font-display font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">{te.tu}</span>
                   )}
                 </div>
                 <span className="text-[12px] text-on-surface-variant">{ROL_LABEL[u.rol] || u.rol}</span>
@@ -194,21 +190,21 @@ export default function EquipoSection({ limite, usuarioActualId }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-display font-semibold text-[13px] truncate">{inv.nombre || inv.email}</span>
-                  <span className="text-[10px] font-display font-semibold text-tertiary bg-tertiary/10 px-1.5 py-0.5 rounded">Pendiente</span>
+                  <span className="text-[10px] font-display font-semibold text-tertiary bg-tertiary/10 px-1.5 py-0.5 rounded">{te.pendiente}</span>
                 </div>
                 <span className="text-[12px] text-on-surface-variant truncate">{inv.email} · {ROL_LABEL[inv.rol] || inv.rol}</span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => reenviarInvitacion(inv.id, inv.email)}
-                  title="Reenviar invitación"
+                  title={te.reenviarTitle}
                   className="p-1.5 text-on-surface-variant hover:text-primary transition-colors"
                 >
                   <Icon name="forward_to_inbox" className="text-[16px] leading-none" />
                 </button>
                 <button
                   onClick={() => cancelarInvitacion(inv.id)}
-                  title="Cancelar invitación"
+                  title={te.cancelarTitle}
                   className="p-1.5 text-on-surface-variant hover:text-error transition-colors"
                 >
                   <Icon name="close" className="text-[16px] leading-none" />
@@ -222,8 +218,7 @@ export default function EquipoSection({ limite, usuarioActualId }) {
       {/* Mensaje de límite alcanzado */}
       {alLimite && (
         <p className="text-[12px] text-on-surface-variant mt-3">
-          Alcanzaste el límite de <span className="font-semibold text-on-surface">{lim}</span> usuarios de tu plan.
-          Sube de plan para agregar más.
+          {te.limiteParte1}<span className="font-semibold text-on-surface">{lim}</span>{te.limiteParte2}
         </p>
       )}
     </div>

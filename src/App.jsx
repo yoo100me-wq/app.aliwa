@@ -5,6 +5,8 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import SetupBusinessPage from './pages/SetupBusinessPage'
 import ConfirmarInvitacionPage from './pages/ConfirmarInvitacionPage'
+import OpenpayCallbackPage from './pages/OpenpayCallbackPage'
+import { LangProvider } from './i18n-app'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -23,9 +25,10 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<LangProvider><DashboardPage /></LangProvider>} />
         <Route path="/configurar-negocio" element={<SetupBusinessPage />} />
         <Route path="/confirmar-invitacion" element={<ConfirmarInvitacionPage />} />
+        <Route path="/openpay-callback" element={<OpenpayCallbackPage />} />
 
         {/* Versiones en inglés de login/registro */}
         <Route path="/en" element={<LoginPage />} />

@@ -57,6 +57,7 @@ export async function launchWhatsAppSignup() {
     }
 
     let signupData = {}
+    let coexistencia = false
 
     const messageHandler = (event) => {
       // Aceptar cualquier subdominio de facebook.com (www, web, business, ...)
@@ -68,6 +69,11 @@ export async function launchWhatsAppSignup() {
         if (data.type === 'WA_EMBEDDED_SIGNUP') {
           if (data.event === 'FINISH') {
             signupData = data.data
+          } else if (data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+            // Coexistencia: el cliente vinculó su app de WhatsApp Business
+            // (escaneó el QR). El número sigue activo en su teléfono.
+            signupData = data.data || {}
+            coexistencia = true
           } else if (data.event === 'FINISH_ONLY_WABA') {
             signupData = { waba_id: data.data.waba_id }
           } else if (data.event === 'CANCEL') {
@@ -94,6 +100,7 @@ export async function launchWhatsAppSignup() {
             href: window.location.href,
             wabaId: signupData.waba_id || null,
             phoneNumberId: signupData.phone_number_id || null,
+            coexistencia,
           })
         } else {
           reject(new Error('cancel'))
@@ -105,7 +112,11 @@ export async function launchWhatsAppSignup() {
         override_default_response_type: true,
         extras: {
           setup: {},
-          featureType: '',
+          // Habilita la opción de COEXISTENCIA dentro del popup: el cliente
+          // puede vincular su app de WhatsApp Business actual (QR) en lugar
+          // de registrar un número nuevo. Si elige número nuevo, el flujo
+          // termina con el evento FINISH normal.
+          featureType: 'whatsapp_business_app_onboarding',
           sessionInfoVersion: '3',
         },
       }

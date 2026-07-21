@@ -27,3 +27,18 @@ export async function apiFetch(endpoint, options = {}) {
 
   return { res, data }
 }
+
+/**
+ * Igual que apiFetch pero para FormData (archivos): NO fija Content-Type
+ * (el navegador pone el boundary de multipart) y conserva el header CSRF.
+ */
+export async function apiUpload(endpoint, formData) {
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'X-Aliwa-Client': '1' },
+    body: formData,
+  })
+  const data = await res.json()
+  return { res, data }
+}

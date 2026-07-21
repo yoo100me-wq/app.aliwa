@@ -47,67 +47,75 @@
 /* === Theme === */
 
 @theme {
-  /* Primary - Berenjena (logo) */
+  /* Paleta app-aliwa CLEAN: grises, blancos y negros (también en sombras).
+     Morado #6C36FF SOLO como acento mínimo (tokens purple/tertiary).
+     Seleccionado = bold, no color. */
+  /* Primary - Morado oscuro del logo (acciones, activos) */
   --color-primary: #3c2c50;
-  --color-primary-container: #3c2c50;
-  --color-on-primary: #f8f9fa;
-  --color-on-primary-container: #ede9f3;
-  --color-primary-fixed: #e8e0f0;
+  --color-primary-container: #ece7f2;
+  --color-on-primary: #FFFFFF;
+  --color-on-primary-container: #3c2c50;
+  --color-primary-fixed: #ece7f2;
   --color-primary-fixed-dim: #9b8bb5;
-  --color-inverse-primary: #9b8bb5;
+  --color-inverse-primary: #b9a6d4;
 
-  /* Secondary - Slate */
-  --color-secondary: #64748b;
-  --color-on-secondary: #f8f9fa;
-  --color-secondary-container: #e2e8f0;
-  --color-on-secondary-container: #475569;
-  --color-secondary-fixed: #e2e8f0;
-  --color-secondary-fixed-dim: #94a3b8;
+  /* Secondary - Gris */
+  --color-secondary: #6b6b70;
+  --color-on-secondary: #FFFFFF;
+  --color-secondary-container: #ededee;
+  --color-on-secondary-container: #3f3f44;
+  --color-secondary-fixed: #ededee;
+  --color-secondary-fixed-dim: #a1a1a6;
 
-  /* Tertiary - Indigo */
-  --color-tertiary: #6366F1;
-  --color-on-tertiary: #f8f9fa;
-  --color-tertiary-container: #6366F1;
-  --color-on-tertiary-container: #eef2ff;
-  --color-tertiary-fixed: #e0e7ff;
-  --color-tertiary-fixed-dim: #a5b4fc;
+  /* Tertiary - Morado (acento mínimo) */
+  --color-tertiary: #6C36FF;
+  --color-on-tertiary: #FFFFFF;
+  --color-tertiary-container: #efeaff;
+  --color-on-tertiary-container: #3d16a8;
+  --color-tertiary-fixed: #efeaff;
+  --color-tertiary-fixed-dim: #a684ff;
 
-  /* Error */
+  /* Error (funcional) */
   --color-error: #dc2626;
-  --color-on-error: #f8f9fa;
+  --color-on-error: #FFFFFF;
   --color-error-container: #fecaca;
   --color-on-error-container: #991b1b;
 
-  /* Surfaces */
-  --color-background: #F8F9FA;
-  --color-on-background: #1e1b2e;
-  --color-surface: #F8F9FA;
-  --color-on-surface: #1e1b2e;
-  --color-on-surface-variant: #57526b;
-  --color-surface-variant: #e8e5f0;
-  --color-surface-dim: #d4d0de;
-  --color-surface-bright: #F8F9FA;
-  --color-surface-tint: #34284D;
-  --color-surface-container: #f0eef5;
-  --color-surface-container-low: #F8F9FA;
-  --color-surface-container-high: #e8e5f0;
-  --color-surface-container-highest: #d4d0de;
-  --color-surface-container-lowest: #f8f7fc;
-  --color-inverse-surface: #1e1b2e;
-  --color-inverse-on-surface: #f0eef5;
+  /* Surfaces - fondos unificados en blanco puro; los -high/-highest
+     quedan gris solo para controles (hovers, inputs, chips) */
+  --color-background: #FFFFFF;
+  --color-on-background: #18181b;
+  --color-surface: #FFFFFF;
+  --color-on-surface: #18181b;
+  --color-on-surface-variant: #6b6b70;
+  --color-surface-variant: #ededee;
+  --color-surface-dim: #d9d9dc;
+  --color-surface-bright: #FFFFFF;
+  --color-surface-tint: #3c2c50;
+  --color-surface-container: #FFFFFF;
+  --color-surface-container-low: #FFFFFF;
+  --color-surface-container-high: #f0f0f1;
+  --color-surface-container-highest: #e5e5e6;
+  --color-surface-container-lowest: #FFFFFF;
+  --color-inverse-surface: #18181b;
+  --color-inverse-on-surface: #f4f4f5;
 
-  --color-outline: #6b6580;
-  --color-outline-variant: #ccc7d8;
+  --color-outline: #8a8a8f;
+  /* Líneas decorativas muy sutiles en claro */
+  --color-outline-variant: #e5e5e7;
 
-  /* Accent - Lima (color de la W del icono) */
-  --color-accent: #D1FF94;
-  --color-on-accent: #1a2e05;
-  --color-accent-dim: #b8e66e;
+  /* Accent - Morado oscuro del logo (CTA) */
+  --color-accent: #3c2c50;
+  --color-on-accent: #FFFFFF;
+  --color-accent-dim: #4d3a66;
 
-  /* Purple - Indigo vibrante */
-  --color-purple: #6366F1;
-  --color-purple-dim: #4f46e5;
-  --color-purple-light: #a5b4fc;
+  /* Purple - acento mínimo */
+  --color-purple: #6C36FF;
+  --color-purple-dim: #5527cc;
+  --color-purple-light: #a684ff;
+
+  /* Seleccionado - bold en morado oscuro del logo */
+  --color-selected: #3c2c50;
 
   /* Fonts */
   --font-logo: "Chillax", system-ui, sans-serif;
@@ -165,54 +173,58 @@
   }
 
   .dark {
-    --color-primary: #9b8bb5;
-    --color-primary-container: #3c2c50;
-    --color-on-primary: #1e1b2e;
-    --color-on-primary-container: #e8e0f0;
-    --color-primary-fixed: #2a2040;
-    --color-primary-fixed-dim: #9b8bb5;
+    --color-primary: #e4e4e7;
+    --color-primary-container: #2d2d31;
+    --color-on-primary: #131214;
+    --color-on-primary-container: #e4e4e7;
+    --color-primary-fixed: #2d2d31;
+    --color-primary-fixed-dim: #e4e4e7;
 
-    --color-secondary: #94a3b8;
-    --color-on-secondary: #1e1b2e;
-    --color-secondary-container: #1e293b;
-    --color-on-secondary-container: #94a3b8;
+    --color-secondary: #9c9ca3;
+    --color-on-secondary: #131214;
+    --color-secondary-container: #28282c;
+    --color-on-secondary-container: #d4d4d8;
 
-    --color-tertiary: #a5b4fc;
-    --color-on-tertiary: #1e1b2e;
-    --color-tertiary-container: #4f46e5;
-    --color-on-tertiary-container: #e0e7ff;
+    --color-tertiary: #a684ff;
+    --color-on-tertiary: #131214;
+    --color-tertiary-container: #3d16a8;
+    --color-on-tertiary-container: #efeaff;
 
     --color-error: #fca5a5;
     --color-on-error: #450a0a;
     --color-error-container: #7f1d1d;
     --color-on-error-container: #fecaca;
 
-    --color-background: #0f0d18;
-    --color-on-background: #e8e5f0;
-    --color-surface: #0f0d18;
-    --color-on-surface: #e8e5f0;
-    --color-on-surface-variant: #9b95b0;
-    --color-surface-variant: #2a2540;
-    --color-surface-dim: #1a1728;
-    --color-surface-bright: #2a2540;
-    --color-surface-tint: #9b8bb5;
-    --color-surface-container: #161322;
-    --color-surface-container-low: #1a1728;
-    --color-surface-container-high: #2a2540;
-    --color-surface-container-highest: #3a3555;
-    --color-surface-container-lowest: #0f0d18;
-    --color-inverse-surface: #e8e5f0;
-    --color-inverse-on-surface: #1e1b2e;
+    /* Fondos unificados en negro puro; -high/-highest gris para controles */
+    --color-background: #000000;
+    --color-on-background: #ededee;
+    --color-surface: #000000;
+    --color-on-surface: #ededee;
+    --color-on-surface-variant: #9c9ca3;
+    --color-surface-variant: #26262a;
+    --color-surface-dim: #121113;
+    --color-surface-bright: #26262a;
+    --color-surface-tint: #e4e4e7;
+    --color-surface-container: #000000;
+    --color-surface-container-low: #000000;
+    --color-surface-container-high: #1a1a1c;
+    --color-surface-container-highest: #242426;
+    --color-surface-container-lowest: #000000;
+    --color-inverse-surface: #ededee;
+    --color-inverse-on-surface: #131214;
 
-    --color-outline: #6b6580;
-    --color-outline-variant: #3a3555;
+    --color-outline: #6a6a70;
+    --color-outline-variant: #28282c;
 
-    --color-accent: #D1FF94;
-    --color-on-accent: #1a2e05;
-    --color-accent-dim: #b8e66e;
+    --color-accent: #e4e4e7;
+    --color-on-accent: #131214;
+    --color-accent-dim: #cfcfd4;
 
-    --color-purple: #a5b4fc;
-    --color-purple-dim: #6366F1;
-    --color-purple-light: #c7d2fe;
+    --color-purple: #a684ff;
+    --color-purple-dim: #6C36FF;
+    --color-purple-light: #c6b2ff;
+
+    /* En oscuro el seleccionado es neutro puro (blanco), sin tinte morado */
+    --color-selected: #ffffff;
   }
 }

@@ -104,7 +104,7 @@ export default function WaitlistModal() {
                 value={contacto}
                 onChange={(e) => setContacto(e.target.value)}
                 placeholder={tw.placeholder}
-                className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-[15px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                className="w-full bg-surface-container-high/50 rounded-2xl px-4 py-3.5 text-[15px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               />
               {error && <p className="text-[13px] text-error font-display">{error}</p>}
               <button

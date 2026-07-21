@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { apiFetch } from '../../utils/api'
+import { apiFetch, apiUpload } from '../../utils/api'
 import FiltrosConversaciones from './FiltrosConversaciones'
 import ListaConversaciones from './ListaConversaciones'
 import VistaConversacion from './VistaConversacion'
 import LeadPanel from './LeadPanel'
+import { useLang } from '../../i18n-app'
 
 export default function ConversacionesPanel({ usuarioId }) {
+  const { t } = useLang()
+  const tc = t.chats
   const [conversaciones, setConversaciones] = useState([])
   const [conversacionActiva, setConversacionActiva] = useState(null)
   const [cargandoLista, setCargandoLista] = useState(true)
@@ -111,10 +114,71 @@ export default function ConversacionesPanel({ usuarioId }) {
     cargarConversaciones()
   }
 
+  // Recargar detalle + lista (tras enviar media o interactivo)
+  const recargarActiva = async (id) => {
+    const { res, data } = await apiFetch(`/api/conversaciones/${id}/`)
+    if (res.ok) setConversacionActiva(data)
+    cargarConversaciones()
+  }
+
+  // Enviar archivo (imagen, video, audio, documento) con caption opcional
+  const enviarMedia = async (archivo, caption) => {
+    if (!conversacionActiva) return { ok: false }
+    const id = conversacionActiva.id
+    const form = new FormData()
+    form.append('archivo', archivo)
+    if (caption) form.append('caption', caption)
+    try {
+      const { res, data } = await apiUpload(`/api/conversaciones/${id}/send-media/`, form)
+      if (res.ok) await recargarActiva(id)
+      return { ok: res.ok, error: data?.error }
+    } catch {
+      return { ok: false, error: tc.errorConexion }
+    }
+  }
+
+  // Enviar mensaje interactivo (botones o lista)
+  const enviarInteractivo = async (payload) => {
+    if (!conversacionActiva) return { ok: false }
+    const id = conversacionActiva.id
+    try {
+      const { res, data } = await apiFetch(`/api/conversaciones/${id}/send-interactive/`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) await recargarActiva(id)
+      return { ok: res.ok, error: data?.error }
+    } catch {
+      return { ok: false, error: tc.errorConexion }
+    }
+  }
+
+  // Enviar plantilla aprobada (única vía fuera de la ventana de 24h)
+  const enviarPlantilla = async (payload) => {
+    if (!conversacionActiva) return { ok: false }
+    const id = conversacionActiva.id
+    try {
+      const { res, data } = await apiFetch(`/api/conversaciones/${id}/send-template/`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) await recargarActiva(id)
+      return { ok: res.ok, error: data?.error }
+    } catch {
+      return { ok: false, error: tc.errorConexion }
+    }
+  }
+
+  // "Escribiendo..." en el WhatsApp del cliente (fire-and-forget)
+  const notificarTyping = () => {
+    if (!conversacionActiva) return
+    apiFetch(`/api/conversaciones/${conversacionActiva.id}/typing/`, { method: 'POST' }).catch(() => {})
+  }
+
   return (
     <div className="flex h-full">
       {/* Contenedor de filtros (asignación) */}
-      <div className="w-[176px] shrink-0 bg-surface-container-lowest border-r border-outline-variant/15 overflow-hidden">
+      <div className="w-[176px] shrink-0 bg-surface-container-lowest border-r border-outline-variant overflow-hidden">
         <FiltrosConversaciones
           filtroActivo={filtroAsignacion}
           onCambiar={setFiltroAsignacion}
@@ -123,7 +187,7 @@ export default function ConversacionesPanel({ usuarioId }) {
       </div>
 
       {/* Contenedor de lista */}
-      <div className="w-[264px] shrink-0 bg-surface-container-lowest border-r border-outline-variant/15 overflow-hidden">
+      <div className="w-[264px] shrink-0 bg-surface-container-lowest border-r border-outline-variant overflow-hidden">
         <ListaConversaciones
           conversaciones={conversaciones}
           conversacionActivaId={conversacionActiva?.id}
@@ -139,10 +203,16 @@ export default function ConversacionesPanel({ usuarioId }) {
       </div>
 
       {/* Panel derecho - Chat */}
-      <div className="flex-1 bg-surface-container overflow-hidden">
+      {/* min-w-0 permite que el chat se encoja cuando el panel de
+          notificaciones está abierto (el layout se auto-ajusta) */}
+      <div className="flex-1 min-w-0 bg-surface-container overflow-hidden">
         <VistaConversacion
           conversacion={conversacionActiva}
           onEnviar={enviarMensaje}
+          onEnviarMedia={enviarMedia}
+          onEnviarInteractivo={enviarInteractivo}
+          onEnviarPlantilla={enviarPlantilla}
+          onTyping={notificarTyping}
           cargando={cargandoDetalle}
           onEditarLead={() => conversacionActiva?.prospecto && setLeadModalOpen(true)}
         />

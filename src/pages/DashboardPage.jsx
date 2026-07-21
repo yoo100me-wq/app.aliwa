@@ -5,57 +5,39 @@ import AliwaIcon, { AliwaLogo } from '../components/shared/AliwaIcon'
 import useTheme from '../hooks/useTheme'
 import ConversacionesPanel from '../components/dashboard/ConversacionesPanel'
 import EquipoSection from '../components/dashboard/EquipoSection'
+import PlantillasSection from '../components/dashboard/PlantillasSection'
+import WhatsappSection from '../components/dashboard/WhatsappSection'
+import OpenpaySection from '../components/dashboard/OpenpaySection'
+import SuscripcionCheckout from '../components/dashboard/SuscripcionCheckout'
 import { apiFetch } from '../utils/api'
-import { initFacebookSDK, launchWhatsAppSignup } from '../utils/facebook'
+import { initFacebookSDK } from '../utils/facebook'
+import { useLang } from '../i18n-app'
 
+// Solo ids/iconos: los labels salen de t.dash.menu / t.dash.menuGrupos
+// Facturación, Pipelines, Citas, Embudo, Pago WhatsApp y Tienda se agregarán
+// cuando existan sus funcionalidades (ids: invoiced, process-flow, appointments,
+// sales-flow, wa-pay, store). Sus claves i18n se conservan en dash.js.
 const menuGroups = [
-  { id: 'dashboard', icon: 'widgets', label: 'Panel' },
+  { id: 'dashboard', icon: 'widgets' },
   {
-    label: 'CRM', icon: 'group_work',
+    labelKey: 'crm', icon: 'group_work',
     items: [
-      { id: 'conversations', icon: 'chat', label: 'Chats' },
-      { id: 'leads', icon: 'person_search', label: 'Contactos' },
-      { id: 'customers', icon: 'stacks', label: 'Plantillas' },
-      { id: 'sales-flow', icon: 'filter_list', label: 'Embudo', iconClass: '-rotate-90' },
-      { id: 'process-flow', icon: 'graph_1', label: 'Pipelines' },
-      { id: 'appointments', icon: 'view_week', label: 'Citas' },
-    ],
-  },
-  {
-    label: 'Facturas', icon: 'description',
-    items: [
-      { id: 'invoiced', icon: 'task_alt', label: 'Facturación' },
+      { id: 'conversations', icon: 'chat' },
+      { id: 'leads', icon: 'person_search' },
+      { id: 'numbers', icon: 'call' },
+      { id: 'customers', icon: 'stacks' },
     ],
   },
 ]
 
-const pageContent = {
-  setup: { title: 'Configurar negocio', description: 'Completa la información de tu negocio para empezar.' },
-  'setup-whatsapp': { title: 'Conectar WhatsApp', description: 'Vincula tu número de WhatsApp Business.' },
-  'setup-team': { title: 'Tu equipo', description: 'Invita a tu equipo y asigna permisos.' },
-  'setup-payments': { title: 'Cobros', description: 'Configura OpenPay para cobrar a tus clientes.' },
-  'setup-invoicing': { title: 'Facturación', description: 'Configura la emisión de facturas CFDI.' },
-  'setup-subscription': { title: 'Suscripción', description: 'Agrega tu método de pago para continuar después de la prueba.' },
-  dashboard: { title: null, description: 'Aquí verás el resumen de tu negocio.' },
-  conversations: { title: 'Chats', description: 'Gestiona los chats de WhatsApp con tus clientes.' },
-  leads: { title: 'Contactos', description: 'Prospectos y clientes de tu negocio.' },
-  customers: { title: 'Plantillas', description: 'Plantillas de mensajes para WhatsApp.' },
-  'sales-flow': { title: 'Embudo', description: 'Pipelines de venta personalizados.' },
-  'process-flow': { title: 'Pipelines', description: 'Seguimiento de procesos y tratamientos.' },
-  appointments: { title: 'Citas', description: 'Agenda y gestiona las citas de tus clientes.' },
-  charges: { title: 'Cargos', description: 'Cobra a tus clientes con tarjeta o transferencia.' },
-  transactions: { title: 'Transacciones', description: 'Historial de pagos recibidos.' },
-  invoiced: { title: 'Facturación', description: 'Facturas CFDI emitidas.' },
-  'pending-invoice': { title: 'Pendiente de facturar', description: 'Pagos que aún no se han facturado.' },
-  'report-financial': { title: 'Reporte financiero', description: 'Ingresos, egresos y flujo de efectivo.' },
-  'report-fiscal': { title: 'Reporte fiscal', description: 'Resumen para declaraciones fiscales.' },
-  'report-operative': { title: 'Reporte operativo', description: 'Métricas de operación del negocio.' },
-}
-
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const { lang, t, toggleLang } = useLang()
+  const td = t.dash
+  const localeFecha = lang === 'en' ? 'en-US' : 'es-MX'
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  // Preferencia persistida: sidebar colapsado
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('aliwa-sidebar-collapsed') === '1')
   const [activeSection, setActiveSection] = useState('dashboard')
   const [dark, toggleDark] = useTheme()
   const [usuario, setUsuario] = useState(null)
@@ -66,10 +48,20 @@ export default function DashboardPage() {
   const [negocios, setNegocios] = useState([])
   const [negocioActivo, setNegocioActivo] = useState(null)
   const [negocioMenuOpen, setNegocioMenuOpen] = useState(false)
-  const [panelActivo, setPanelActivo] = useState(null) // null | 'notificaciones' | 'settings'
+  // Preferencia persistida: si el panel de notificaciones quedó abierto,
+  // se restaura al volver a entrar (settings NO se persiste).
+  const [panelActivo, setPanelActivo] = useState(() =>
+    localStorage.getItem('aliwa-panel-notif') === '1' ? 'notificaciones' : null
+  ) // null | 'notificaciones' (Configuración vive en activeSection === 'settings')
   const [settingsTab, setSettingsTab] = useState('cuenta')
   const [editNombre, setEditNombre] = useState('')
   const [editApellido, setEditApellido] = useState('')
+  const [editAvatar, setEditAvatar] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [emailCodigo, setEmailCodigo] = useState('')
+  const [emailPaso, setEmailPaso] = useState('idle') // idle | codigo
+  const [cuentaGuardando, setCuentaGuardando] = useState(false)
+  const [cuentaEditando, setCuentaEditando] = useState(false)
   const [passActual, setPassActual] = useState('')
   const [passNueva, setPassNueva] = useState('')
   const [passConfirm, setPassConfirm] = useState('')
@@ -90,11 +82,10 @@ export default function DashboardPage() {
   const [setupLoading, setSetupLoading] = useState(false)
   const [giroOpen, setGiroOpen] = useState(false)
   const [giroBuscar, setGiroBuscar] = useState('')
-  const [waLoading, setWaLoading] = useState(false)
-  const [waError, setWaError] = useState('')
   const [waConectado, setWaConectado] = useState(false)
   const [equipoListo, setEquipoListo] = useState(() => localStorage.getItem('aliwa-setup-team-done') === '1')
 
+  const pageContent = td.paginas
   const current = pageContent[activeSection]
 
   useEffect(() => {
@@ -119,25 +110,38 @@ export default function DashboardPage() {
         setWaConectado(nums.some(n => n.estado === 'activo'))
       }
     }).catch(() => {})
+    // Si el panel de notificaciones quedó abierto (preferencia restaurada),
+    // cargar su contenido al entrar.
+    if (panelActivo === 'notificaciones') {
+      setNotifLoading(true)
+      apiFetch('/api/notificaciones/').then(({ res, data }) => {
+        if (res.ok) setNotificaciones(data.results || data || [])
+      }).catch(() => setNotificaciones([])).finally(() => setNotifLoading(false))
+    }
   }, [])
+
+  // Persistir preferencias de layout
+  useEffect(() => {
+    localStorage.setItem('aliwa-sidebar-collapsed', collapsed ? '1' : '0')
+  }, [collapsed])
+  useEffect(() => {
+    localStorage.setItem('aliwa-panel-notif', panelActivo === 'notificaciones' ? '1' : '0')
+  }, [panelActivo])
 
   const nombreUsuario = usuario?.nombre?.split(' ')[0] || ''
 
   const handleNav = (id) => {
     setActiveSection(id)
     setSidebarOpen(false)
+    // Al navegar por el sidebar, salir de la vista de Suscripción del panel principal
+    if (settingsTab === 'suscripcion') setSettingsTab('cuenta')
   }
 
-  const girosNegocio = [
-    'Dentista', 'Consultorio médico', 'Restaurante', 'Cafetería',
-    'Estética / Salón', 'Barbería', 'Gimnasio', 'Spa',
-    'Veterinaria', 'Terapia / Psicología', 'Taller mecánico',
-    'Tienda / Abarrotes', 'Tutorías / Clases', 'Otro',
-  ]
+  const girosNegocio = td.giros
 
   const guardarNegocio = async (e) => {
     e.preventDefault()
-    if (!setupNombre || !setupGiro) { setSetupError('Nombre y giro son requeridos'); return }
+    if (!setupNombre || !setupGiro) { setSetupError(td.setup.errRequeridos); return }
     setSetupError('')
     setSetupLoading(true)
     try {
@@ -159,40 +163,12 @@ export default function DashboardPage() {
         }
         handleNav('setup-whatsapp')
       } else {
-        setSetupError(data.error || 'Error al configurar')
+        setSetupError(data.error || td.setup.errConfigurar)
       }
     } catch {
-      setSetupError('Error de conexión')
+      setSetupError(td.setup.errConexion)
     } finally {
       setSetupLoading(false)
-    }
-  }
-
-  const conectarWhatsApp = async () => {
-    setWaError('')
-    setWaLoading(true)
-    try {
-      const { code, sessionData, origin, href, wabaId, phoneNumberId } = await launchWhatsAppSignup()
-      const { res, data } = await apiFetch('/api/whatsapp/conectar/', {
-        method: 'POST',
-        body: JSON.stringify({ code, session_data: sessionData, origin, href, waba_id: wabaId, phone_number_id: phoneNumberId }),
-      })
-      if (res.ok) {
-        setWaConectado(true)
-        // Recargar negocios para actualizar estado
-        const { res: r2, data: d2 } = await apiFetch('/api/negocios/')
-        if (r2.ok) {
-          const lista = d2.results || d2 || []
-          setNegocios(lista)
-          if (lista.length > 0) setNegocioActivo(lista[0])
-        }
-      } else {
-        setWaError(data.error || 'Error al conectar WhatsApp')
-      }
-    } catch (e) {
-      if (e.message !== 'cancel') setWaError('Error al conectar. Intenta de nuevo.')
-    } finally {
-      setWaLoading(false)
     }
   }
 
@@ -211,13 +187,21 @@ export default function DashboardPage() {
     }).catch(() => setNotificaciones([])).finally(() => setNotifLoading(false))
   }
 
+  // Configuración es una sección del contenido principal (como Chats):
+  // abrirla reemplaza la sección activa, pero convive con Notificaciones.
   const abrirSettings = (tab = 'cuenta') => {
-    setPanelActivo('settings')
+    setActiveSection('settings')
+    setSidebarOpen(false)
     setSettingsTab(tab)
     setSettingsMsg('')
-    if (tab === 'cuenta' && usuario) {
+    if ((tab === 'cuenta' || tab === 'editar-cuenta') && usuario) {
       setEditNombre(usuario.nombre?.split(' ')[0] || '')
       setEditApellido(usuario.apellido || usuario.nombre?.split(' ').slice(1).join(' ') || '')
+      setEditAvatar(usuario.avatar || '')
+      setEditEmail(usuario.email || '')
+      setEmailCodigo('')
+      setEmailPaso('idle')
+      setCuentaEditando(false)
     }
     if (tab === 'seguridad') {
       setPassActual('')
@@ -231,22 +215,92 @@ export default function DashboardPage() {
 
   const guardarCuenta = async () => {
     setSettingsMsg('')
-    const { res, data } = await apiFetch('/api/auth/actualizar-perfil/', {
-      method: 'PATCH',
-      body: JSON.stringify({ nombre: editNombre, apellido: editApellido }),
-    })
-    if (res.ok) {
-      setUsuario(data)
-      setSettingsMsg('Datos actualizados')
-    } else {
-      setSettingsMsg(data.error || 'Error al actualizar')
+    setCuentaGuardando(true)
+    try {
+      const { res, data } = await apiFetch('/api/auth/actualizar-perfil/', {
+        method: 'PATCH',
+        body: JSON.stringify({ nombre: editNombre, apellido: editApellido, avatar: editAvatar }),
+      })
+      if (res.ok) {
+        setUsuario((prev) => ({ ...prev, ...data }))
+        setSettingsMsg(td.cuentaForm.guardado)
+        setCuentaEditando(false)
+      } else {
+        setSettingsMsg(data.error || td.settingsMsg.errActualizar)
+      }
+    } catch {
+      setSettingsMsg(td.cuentaForm.errConexion)
+    } finally {
+      setCuentaGuardando(false)
+    }
+  }
+
+  // Foto de perfil: redimensiona a 256px (cover) y guarda como data URL chica
+  const onFotoSeleccionada = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const img = new Image()
+    img.onload = () => {
+      const lado = 256
+      const canvas = document.createElement('canvas')
+      canvas.width = lado
+      canvas.height = lado
+      const ctx = canvas.getContext('2d')
+      const escala = Math.max(lado / img.width, lado / img.height)
+      const w = img.width * escala
+      const h = img.height * escala
+      ctx.drawImage(img, (lado - w) / 2, (lado - h) / 2, w, h)
+      setEditAvatar(canvas.toDataURL('image/jpeg', 0.85))
+      URL.revokeObjectURL(img.src)
+    }
+    img.onerror = () => setSettingsMsg(td.cuentaForm.errFoto)
+    img.src = URL.createObjectURL(file)
+  }
+
+  const solicitarCambioCorreo = async () => {
+    setSettingsMsg('')
+    try {
+      const { res, data } = await apiFetch('/api/auth/cambiar-correo/solicitar/', {
+        method: 'POST',
+        body: JSON.stringify({ email: editEmail.trim() }),
+      })
+      if (res.ok) {
+        setEmailPaso('codigo')
+        setEmailCodigo('')
+      } else {
+        setSettingsMsg(data.error || td.cuentaForm.errConexion)
+      }
+    } catch {
+      setSettingsMsg(td.cuentaForm.errConexion)
+    }
+  }
+
+  const confirmarCambioCorreo = async () => {
+    setSettingsMsg('')
+    try {
+      const { res, data } = await apiFetch('/api/auth/cambiar-correo/confirmar/', {
+        method: 'POST',
+        body: JSON.stringify({ codigo: emailCodigo.trim() }),
+      })
+      if (res.ok) {
+        setUsuario((prev) => ({ ...prev, email: data.email }))
+        setEditEmail(data.email)
+        setEmailPaso('idle')
+        setEmailCodigo('')
+        setSettingsMsg(td.cuentaForm.correoActualizado)
+      } else {
+        setSettingsMsg(data.error || td.cuentaForm.errConexion)
+      }
+    } catch {
+      setSettingsMsg(td.cuentaForm.errConexion)
     }
   }
 
   const cambiarPassword = async () => {
     setSettingsMsg('')
-    if (passNueva !== passConfirm) { setSettingsMsg('Las contraseñas no coinciden'); return }
-    if (passNueva.length < 8) { setSettingsMsg('Mínimo 8 caracteres'); return }
+    if (passNueva !== passConfirm) { setSettingsMsg(td.settingsMsg.passNoCoincide); return }
+    if (passNueva.length < 8) { setSettingsMsg(td.settingsMsg.passMin); return }
     const { res, data } = await apiFetch('/api/auth/cambiar-password/', {
       method: 'POST',
       body: JSON.stringify({ password_actual: passActual, password_nueva: passNueva }),
@@ -255,9 +309,9 @@ export default function DashboardPage() {
       setPassActual('')
       setPassNueva('')
       setPassConfirm('')
-      setSettingsMsg('Contraseña actualizada')
+      setSettingsMsg(td.settingsMsg.passActualizada)
     } else {
-      setSettingsMsg(data.error || 'Error al cambiar contraseña')
+      setSettingsMsg(data.error || td.settingsMsg.errPassword)
     }
   }
 
@@ -268,16 +322,15 @@ export default function DashboardPage() {
         {/* Sidebar */}
         <aside className={`fixed inset-y-0 left-0 z-40 bg-surface-container flex flex-col transition-all duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        } ${collapsed ? 'w-[72px]' : 'w-52'}`}>
+        } ${collapsed ? 'w-[64px]' : 'w-44'}`}>
 
-          {/* Logo */}
-          <div className={`h-11 mt-3 flex items-center shrink-0 ${collapsed ? 'justify-center px-0' : 'gap-2 px-4'}`}>
+          {/* Logo — misma altura (h-11) que el top bar; su línea inferior
+              continúa la línea del dashboard de borde a borde */}
+          <div className={`relative h-11 flex items-center shrink-0 ${collapsed ? 'justify-center px-0' : 'gap-2 px-4'}`}>
             <AliwaIcon size={collapsed ? 28 : 30} />
             {!collapsed && <span className="text-base font-logo font-bold text-on-surface">Aliwa</span>}
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-outline-variant" />
           </div>
-
-          {/* Línea decorativa bajo el logo */}
-          <div className="h-px bg-outline-variant/30 mt-3 shrink-0" />
 
           {/* Nav */}
           <nav className={`flex-1 overflow-y-auto py-1 ${collapsed ? 'px-1.5' : 'px-3'}`}>
@@ -288,17 +341,17 @@ export default function DashboardPage() {
                   <button
                     key={group.id}
                     onClick={() => handleNav(group.id)}
-                    title={collapsed ? group.label : undefined}
+                    title={collapsed ? td.menu[group.id] : undefined}
                     className={`w-full flex items-center gap-2 py-1 text-[13px] font-display transition-colors mb-px ${
                       collapsed ? 'justify-center px-0' : 'px-2.5'
                     } ${
                       activeSection === group.id
-                        ? 'bg-primary/5 text-primary font-semibold'
-                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest'
+                        ? 'bg-primary/3 text-selected font-bold'
+                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
                     }`}
                   >
                     <Icon name={group.icon} fill={activeSection === group.id} className="text-[16px] leading-none" />
-                    {!collapsed && group.label}
+                    {!collapsed && td.menu[group.id]}
                   </button>
                 )
               }
@@ -307,26 +360,26 @@ export default function DashboardPage() {
               const hasActive = group.items.some((i) => i.id === activeSection)
 
               return (
-                <div key={group.label} className="mt-2 mb-0.5">
+                <div key={group.labelKey} className="mt-2 mb-0.5">
                   {!collapsed && (
-                    <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2.5">{group.label}</p>
+                    <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2.5">{td.menuGrupos[group.labelKey]}</p>
                   )}
                   <div className="space-y-px">
                     {group.items.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => handleNav(item.id)}
-                        title={collapsed ? item.label : undefined}
+                        title={collapsed ? td.menu[item.id] : undefined}
                         className={`w-full flex items-center gap-2 py-1 text-[13px] font-display transition-colors ${
                           collapsed ? 'justify-center px-0' : 'px-2.5'
                         } ${
                           activeSection === item.id
-                            ? 'bg-primary/5 text-primary font-semibold'
-                            : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest'
+                            ? 'bg-primary/3 text-selected font-bold'
+                            : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
                         }`}
                       >
                         <Icon name={item.icon} fill={activeSection === item.id} className={`text-[16px] leading-none ${item.iconClass || ''}`} />
-                        {!collapsed && item.label}
+                        {!collapsed && td.menu[item.id]}
                       </button>
                     ))}
                   </div>
@@ -336,27 +389,34 @@ export default function DashboardPage() {
           </nav>
 
           {/* Línea decorativa sobre el área de tema/salir */}
-          <div className="h-px bg-outline-variant/30 shrink-0" />
+          <div className="h-px bg-outline-variant shrink-0" />
 
           {/* Bottom */}
           <div className={`pb-3 space-y-px pt-2 bg-surface-container-low ${collapsed ? 'px-1.5' : 'px-3'}`}>
             {/* Theme toggle */}
             <button
               onClick={toggleDark}
-              title={collapsed ? (dark ? 'Modo oscuro' : 'Modo claro') : undefined}
-              className={`w-full flex items-center text-[13px] font-display text-on-surface-variant hover:bg-surface-container-lowest transition-colors ${
-                collapsed ? 'justify-center py-1 px-0' : 'justify-between px-2.5 py-1'
+              title={collapsed ? (dark ? td.sidebar.modoOscuro : td.sidebar.modoClaro) : undefined}
+              className={`w-full flex items-center text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors ${
+                collapsed ? 'justify-center py-1 px-0' : 'px-2.5 py-1 gap-2'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Icon name={dark ? 'dark_mode' : 'light_mode'} className="text-[16px] leading-none" />
-                {!collapsed && <span>{dark ? 'Modo oscuro' : 'Modo claro'}</span>}
-              </div>
-              {!collapsed && (
-                <div className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-300 ${dark ? 'bg-purple' : 'bg-outline-variant'}`}>
-                  <div className={`w-4 h-4 rounded-full bg-surface-container-lowest transition-transform duration-300 ${dark ? 'translate-x-4' : 'translate-x-0'}`} />
-                </div>
-              )}
+              <Icon name={dark ? 'dark_mode' : 'light_mode'} className="text-[16px] leading-none" />
+              {!collapsed && <span>{dark ? td.sidebar.modoOscuro : td.sidebar.modoClaro}</span>}
+            </button>
+
+            {/* Configuración (panel de ajustes) */}
+            <button
+              onClick={() => abrirSettings('cuenta')}
+              title={collapsed ? td.sidebar.configuracion : undefined}
+              className={`w-full flex items-center text-[13px] font-display transition-colors ${
+                activeSection === 'settings'
+                  ? 'bg-primary/3 text-selected font-bold'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
+              } ${collapsed ? 'justify-center py-1 px-0' : 'px-2.5 py-1 gap-2'}`}
+            >
+              <Icon name="settings" fill={activeSection === 'settings'} className="text-[16px] leading-none" />
+              {!collapsed && <span>{td.sidebar.configuracion}</span>}
             </button>
 
             {/* Logout */}
@@ -365,17 +425,17 @@ export default function DashboardPage() {
                 await apiFetch('/api/auth/logout/', { method: 'POST' })
                 navigate('/login')
               }}
-              title={collapsed ? 'Salir' : undefined}
-              className={`w-full flex items-center text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors ${
+              title={collapsed ? td.sidebar.salir : undefined}
+              className={`w-full flex items-center text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors ${
                 collapsed ? 'justify-center py-1 px-0' : 'px-2.5 py-1 gap-2'
               }`}
             >
               <Icon name="logout" className="text-[16px] leading-none" />
-              {!collapsed && <span>Salir</span>}
+              {!collapsed && <span>{td.sidebar.salir}</span>}
             </button>
 
             {/* Línea decorativa que separa el negocio de tema/salir */}
-            <div className={`h-px bg-outline-variant/30 my-1.5 ${collapsed ? '-mx-1.5' : '-mx-3'}`} />
+            <div className={`h-px bg-outline-variant my-1.5 ${collapsed ? '-mx-1.5' : '-mx-3'}`} />
 
             {/* Negocio */}
             <div className="relative">
@@ -383,7 +443,7 @@ export default function DashboardPage() {
                 <a
                   href="/configurar-negocio"
                   onClick={(e) => { e.preventDefault(); handleNav('setup') }}
-                  className={`w-full block transition-colors border border-dashed border-outline-variant/40 hover:border-tertiary/40 hover:bg-tertiary/5 ${collapsed ? 'p-1.5 flex justify-center' : 'px-2.5 py-2'}`}
+                  className={`w-full block transition-colors border border-dashed border-outline-variant hover:border-tertiary/40 hover:bg-tertiary/5 ${collapsed ? 'p-1.5 flex justify-center' : 'px-2.5 py-2'}`}
                 >
                   {collapsed ? (
                     <div className="w-8 h-8 bg-tertiary/10 flex items-center justify-center">
@@ -395,8 +455,8 @@ export default function DashboardPage() {
                         <Icon name="add_business" className="text-tertiary text-[16px] leading-none" />
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <div className="text-[13px] font-display font-semibold text-on-surface truncate">Configurar negocio</div>
-                        <div className="text-[12px] text-on-surface-variant truncate">Aún no tienes uno</div>
+                        <div className="text-[13px] font-display font-semibold text-on-surface truncate">{td.sidebar.configurarNegocio}</div>
+                        <div className="text-[12px] text-on-surface-variant truncate">{td.sidebar.aunNoTienes}</div>
                       </div>
                     </div>
                   )}
@@ -411,20 +471,20 @@ export default function DashboardPage() {
                       if (negocios.length > 1) setNegocioMenuOpen(!negocioMenuOpen)
                     }
                   }}
-                  className={`w-full transition-colors hover:bg-surface-container-lowest ${collapsed ? 'p-1.5 flex justify-center' : 'px-2.5 py-2'}`}
+                  className={`w-full transition-colors hover:bg-surface-container-high/50 ${collapsed ? 'p-1.5 flex justify-center' : 'px-2.5 py-2'}`}
                 >
                   {collapsed ? (
                     <div className="w-8 h-8 bg-purple/10 flex items-center justify-center">
-                      <Icon name="storefront" className="text-purple text-[16px] leading-none" />
+                      <Icon name="add_business" className="text-purple text-[16px] leading-none" />
                     </div>
                   ) : (
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 bg-purple/10 flex items-center justify-center shrink-0">
-                        <Icon name="storefront" className="text-purple text-[16px] leading-none" />
+                        <Icon name="add_business" className="text-purple text-[16px] leading-none" />
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <div className="text-[13px] font-display font-semibold truncate">{negocioActivo?.nombre || 'Mi Negocio'}</div>
-                        <div className="text-[12px] text-on-surface-variant truncate">{negocioActivo?.giro || 'Sin configurar'}</div>
+                        <div className="text-[13px] font-display font-semibold truncate">{negocioActivo?.nombre || td.sidebar.miNegocio}</div>
+                        <div className="text-[12px] text-on-surface-variant truncate">{negocioActivo?.giro || td.sidebar.sinConfigurar}</div>
                       </div>
                       {negocios.length > 1 && (
                         <Icon name="unfold_more" className="text-on-surface-variant text-[16px] shrink-0" />
@@ -438,8 +498,8 @@ export default function DashboardPage() {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setNegocioMenuOpen(false)} />
                   <div className="absolute bottom-full left-0 right-0 z-50 mb-1 bg-surface-container-high overflow-hidden">
-                    <div className="px-2.5 py-2 border-b border-outline-variant/15">
-                      <span className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">Cambiar negocio</span>
+                    <div className="px-2.5 py-2 border-b border-outline-variant">
+                      <span className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.sidebar.cambiarNegocio}</span>
                     </div>
                     {negocios.map((n) => (
                       <button
@@ -484,7 +544,7 @@ export default function DashboardPage() {
             hover:bg-primary/10 hover:text-primary
             transition-all duration-300
             items-center justify-center
-            ${collapsed ? 'left-[72px]' : 'left-[208px]'}`}
+            ${collapsed ? 'left-[64px]' : 'left-[176px]'}`}
         >
           <Icon name={collapsed ? 'chevron_right' : 'chevron_left'} className="text-[16px]" />
         </button>
@@ -497,12 +557,12 @@ export default function DashboardPage() {
 
       {/* Main — margen izquierdo dinámico */}
       <main className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
-        collapsed ? 'lg:ml-[72px]' : 'lg:ml-52'
+        collapsed ? 'lg:ml-[64px]' : 'lg:ml-44'
       }`}>
         {/* Top bar */}
         <header className="relative flex items-center h-11 bg-surface-container-low px-4 md:px-6 gap-4 shrink-0">
           {/* Línea decorativa (sutil, uniforme) */}
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-outline-variant/30" />
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-outline-variant" />
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="lg:hidden p-1.5 text-on-surface-variant"
@@ -512,45 +572,381 @@ export default function DashboardPage() {
 
           <div className="flex-1 hidden lg:flex items-center gap-1.5 text-sm font-display text-on-surface-variant">
             {(() => {
+              if (activeSection === 'settings') {
+                const tabLabel = {
+                  'suscripcion': td.topbar.suscripcion,
+                  'editar-cuenta': td.panel.editarCuenta,
+                  'crear-usuarios': td.panel.crearUsuarios,
+                  'permisos': td.panel.permisos,
+                  'analitica-usuarios': td.panel.analitica,
+                  'historial-login': td.panel.historialLogin,
+                  'cambiar-password': td.panel.cambiarPassword,
+                }[settingsTab]
+                return <><span>{td.topbar.configuracion}</span>{tabLabel && <><span className="text-outline-variant">/</span><span className="text-on-surface font-medium">{tabLabel}</span></>}</>
+              }
               const group = menuGroups.find(g => g.items?.some(i => i.id === activeSection))
               if (group) {
                 const item = group.items.find(i => i.id === activeSection)
-                return <><span>{group.label}</span><span className="text-outline-variant">/</span><span className="text-on-surface font-medium">{item.label}</span></>
+                return <><span>{td.menuGrupos[group.labelKey]}</span><span className="text-outline-variant">/</span><span className="text-on-surface font-medium">{td.menu[item.id]}</span></>
               }
-              return <span className="text-on-surface font-medium">{current?.title || 'Dashboard'}</span>
+              return <span className="text-on-surface font-medium">{current?.title || td.topbar.dashboard}</span>
             })()}
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Idioma — junto a notificaciones */}
+            <button
+              onClick={toggleLang}
+              title={td.sidebar.idioma}
+              className="p-1.5 transition-colors flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high/50"
+            >
+              <span className="w-[18px] h-[18px] inline-flex items-center justify-center text-[12px] font-display font-bold tracking-tight leading-none">
+                {lang === 'es' ? 'EN' : 'ES'}
+              </span>
+            </button>
             <button
               onClick={abrirNotificaciones}
-              className={`p-1.5 transition-colors flex items-center justify-center relative ${panelActivo === 'notificaciones' ? 'bg-primary/5 text-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              aria-pressed={panelActivo === 'notificaciones'}
+              className={`p-1.5 transition-colors flex items-center justify-center relative ${panelActivo === 'notificaciones' ? 'bg-primary/3 text-selected' : 'text-on-surface-variant hover:bg-surface-container-high/50'}`}
             >
-              <Icon name="notifications" className="text-[18px] leading-none" />
+              <Icon name="notifications" fill={panelActivo === 'notificaciones'} className="text-[18px] leading-none" />
               {notifNoLeidas > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-error text-on-error text-[10px] font-display font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-selected text-surface-container-lowest text-[10px] font-display font-bold rounded-full flex items-center justify-center">
                   {notifNoLeidas > 9 ? '9+' : notifNoLeidas}
                 </span>
               )}
-            </button>
-            <button
-              onClick={() => panelActivo === 'settings' ? setPanelActivo(null) : abrirSettings('cuenta')}
-              className={`p-1.5 transition-colors flex items-center justify-center ${panelActivo === 'settings' ? 'bg-primary/5 text-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}
-            >
-              <Icon name="settings" className="text-[18px] leading-none" />
             </button>
           </div>
         </header>
 
         {/* Content + Panel lateral */}
         <div className="flex-1 flex min-h-0">
+          {/* Sidebar secundario izquierdo — Configuración (y secciones futuras).
+              Mismas dimensiones y tipografía que la bandeja de chats. */}
+          {activeSection === 'settings' && (
+            <aside className="w-44 shrink-0 bg-surface-container-lowest border-r border-outline-variant flex flex-col overflow-hidden">
+              <div className="px-2.5 pt-1.5 pb-1.5 shrink-0">
+                <h2 className="font-display font-bold text-[15px] mb-1">{td.panel.configuracion}</h2>
+              </div>
+              <div className="flex-1 overflow-y-auto px-1 pt-1 pb-2">
+                <div className="space-y-2">
+                  {/* Cuenta */}
+                  <div>
+                    <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2">{td.panel.cuenta}</p>
+                    <div className="space-y-px">
+                      <button onClick={() => abrirSettings('editar-cuenta')} className={`w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display transition-colors ${settingsTab === 'editar-cuenta' ? 'bg-primary/3 text-selected font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'}`}>
+                        <Icon name="edit" className="text-[16px] leading-none" />
+                        {td.panel.editarCuenta}
+                      </button>
+                      <button onClick={() => setSettingsTab('suscripcion')} className={`w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display transition-colors ${settingsTab === 'suscripcion' ? 'bg-primary/3 text-selected font-bold' : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'}`}>
+                        <Icon name="card_membership" fill={settingsTab === 'suscripcion'} className="text-[16px] leading-none" />
+                        {td.panel.suscripcion}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Gestión de usuarios */}
+                  <div>
+                    <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2">{td.panel.gestionUsuarios}</p>
+                    <div className="space-y-px">
+                      <button onClick={() => setSettingsTab('crear-usuarios')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors">
+                        <Icon name="person_add" className="text-[16px] leading-none" />
+                        {td.panel.crearUsuarios}
+                      </button>
+                      <button onClick={() => setSettingsTab('permisos')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors">
+                        <Icon name="admin_panel_settings" className="text-[16px] leading-none" />
+                        {td.panel.permisos}
+                      </button>
+                      <button onClick={() => setSettingsTab('analitica-usuarios')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors">
+                        <Icon name="analytics" className="text-[16px] leading-none" />
+                        {td.panel.analitica}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seguridad */}
+                  <div>
+                    <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2">{td.panel.seguridad}</p>
+                    <div className="space-y-px">
+                      <button onClick={() => setSettingsTab('historial-login')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors">
+                        <Icon name="history" className="text-[16px] leading-none" />
+                        {td.panel.historialLogin}
+                      </button>
+                      <button onClick={() => setSettingsTab('cambiar-password')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors">
+                        <Icon name="lock" className="text-[16px] leading-none" />
+                        {td.panel.cambiarPassword}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          )}
+
           {/* Contenido principal */}
           <div className={`flex-1 min-w-0 overflow-y-auto ${activeSection === 'conversations' ? '' : 'px-4 md:px-6 pt-4 pb-6'}`}>
-          {activeSection === 'setup' ? (
+          {activeSection === 'settings' ? (
+            settingsTab === 'suscripcion' ? (
+              <SuscripcionCheckout />
+            ) : settingsTab === 'cuenta' ? (
+              /* Vista inicial de Configuración: accesos a Editar datos y Suscripción */
+              <div className="max-w-xl mx-auto">
+                <div className="mb-6">
+                  <h1 className="font-display text-xl font-bold mb-1">{td.panel.configuracion}</h1>
+                  <p className="text-[13px] text-on-surface-variant">{td.cuentaForm.subtitulo}</p>
+                </div>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => abrirSettings('editar-cuenta')}
+                    className="w-full flex items-center gap-4 border border-outline-variant bg-surface-container rounded-2xl p-5 text-left transition-colors hover:bg-surface-container-high/40"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-purple/8 flex items-center justify-center shrink-0">
+                      <Icon name="manage_accounts" className="text-purple text-[20px] leading-none" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-[14px] text-on-surface">{td.cuentaForm.titulo}</p>
+                      <p className="text-[12px] text-on-surface-variant leading-[1.5]">{td.cuentaForm.subtitulo}</p>
+                    </div>
+                    <Icon name="chevron_right" className="text-on-surface-variant text-[18px] shrink-0" />
+                  </button>
+
+                  <button
+                    onClick={() => abrirSettings('suscripcion')}
+                    className="w-full flex items-center gap-4 border border-outline-variant bg-surface-container rounded-2xl p-5 text-left transition-colors hover:bg-surface-container-high/40"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-purple/8 flex items-center justify-center shrink-0">
+                      <Icon name="card_membership" className="text-purple text-[20px] leading-none" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-[14px] text-on-surface">{td.panel.suscripcion}</p>
+                      <p className="text-[12px] text-on-surface-variant leading-[1.5]">{td.paginas['setup-subscription'].description}</p>
+                    </div>
+                    <Icon name="chevron_right" className="text-on-surface-variant text-[18px] shrink-0" />
+                  </button>
+
+                  <button
+                    onClick={() => abrirSettings('crear-usuarios')}
+                    className="w-full flex items-center gap-4 border border-outline-variant bg-surface-container rounded-2xl p-5 text-left transition-colors hover:bg-surface-container-high/40"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-purple/8 flex items-center justify-center shrink-0">
+                      <Icon name="group_add" className="text-purple text-[20px] leading-none" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-[14px] text-on-surface">{td.panel.gestionUsuarios}</p>
+                      <p className="text-[12px] text-on-surface-variant leading-[1.5]">{td.cuentaForm.usuariosDesc}</p>
+                    </div>
+                    <Icon name="chevron_right" className="text-on-surface-variant text-[18px] shrink-0" />
+                  </button>
+
+                  <button
+                    onClick={() => abrirSettings('historial-login')}
+                    className="w-full flex items-center gap-4 border border-outline-variant bg-surface-container rounded-2xl p-5 text-left transition-colors hover:bg-surface-container-high/40"
+                  >
+                    <div className="w-11 h-11 rounded-xl bg-purple/8 flex items-center justify-center shrink-0">
+                      <Icon name="security" className="text-purple text-[20px] leading-none" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-[14px] text-on-surface">{td.panel.seguridad}</p>
+                      <p className="text-[12px] text-on-surface-variant leading-[1.5]">{td.cuentaForm.seguridadDesc}</p>
+                    </div>
+                    <Icon name="chevron_right" className="text-on-surface-variant text-[18px] shrink-0" />
+                  </button>
+                </div>
+              </div>
+            ) : settingsTab === 'editar-cuenta' ? (
+              /* Perfil de cuenta con edición inline: el mismo layout se vuelve editable */
+              <div className="max-w-xl mx-auto">
+                {settingsMsg && (
+                  <div className="mb-4 p-3 rounded-lg border border-outline-variant text-on-surface text-[13px] font-display">{settingsMsg}</div>
+                )}
+
+                <div className="flex flex-col items-center text-center pt-4">
+                  {/* Foto grande; en edición se puede cambiar dando clic */}
+                  <div className="relative mb-4">
+                    {cuentaEditando ? (
+                      <label className="block w-28 h-28 rounded-full overflow-hidden bg-surface-container-high cursor-pointer group" title={td.cuentaForm.cambiarFoto}>
+                        {editAvatar ? (
+                          <img src={editAvatar} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="w-full h-full flex items-center justify-center font-display font-bold text-[36px] text-on-surface-variant">
+                            {(usuario?.nombre || '?').charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <span className="absolute inset-0 rounded-full bg-inverse-surface/0 group-hover:bg-inverse-surface/30 transition-colors flex items-center justify-center">
+                          <Icon name="photo_camera" className="text-inverse-on-surface text-[22px] opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </span>
+                        <input type="file" accept="image/*" onChange={onFotoSeleccionada} className="hidden" />
+                      </label>
+                    ) : (
+                      <div className="w-28 h-28 rounded-full overflow-hidden bg-surface-container-high flex items-center justify-center">
+                        {usuario?.avatar ? (
+                          <img src={usuario.avatar} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="font-display font-bold text-[36px] text-on-surface-variant">
+                            {(usuario?.nombre || '?').charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {cuentaEditando && editAvatar && (
+                    <button type="button" onClick={() => setEditAvatar('')}
+                      className="-mt-2 mb-2 text-[11px] font-display text-on-surface-variant hover:text-error transition-colors">
+                      {td.cuentaForm.quitarFoto}
+                    </button>
+                  )}
+
+                  {/* Nombre y apellidos, en su lugar */}
+                  {cuentaEditando ? (
+                    <div className="flex gap-2 w-full max-w-sm">
+                      <input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)}
+                        placeholder={td.cuentaForm.nombre}
+                        className="flex-1 min-w-0 bg-surface-container-high/50 rounded-lg px-3 py-2 text-center font-display font-bold text-[15px] text-on-surface placeholder:font-normal placeholder:text-outline outline-none" />
+                      <input type="text" value={editApellido} onChange={(e) => setEditApellido(e.target.value)}
+                        placeholder={td.cuentaForm.apellido}
+                        className="flex-1 min-w-0 bg-surface-container-high/50 rounded-lg px-3 py-2 text-center font-display font-bold text-[15px] text-on-surface placeholder:font-normal placeholder:text-outline outline-none" />
+                    </div>
+                  ) : (
+                    <h1 className="font-display text-xl font-bold">{usuario?.nombre || '—'}</h1>
+                  )}
+
+                  {/* Correo, en su lugar */}
+                  {cuentaEditando ? (
+                    <div className="w-full max-w-sm mt-2">
+                      <input type="email" value={editEmail} onChange={(e) => { setEditEmail(e.target.value); setEmailPaso('idle') }}
+                        className="w-full bg-surface-container-high/50 rounded-lg px-3 py-2 text-center text-[13px] font-body text-on-surface outline-none" />
+                      <div className="flex items-start justify-center gap-1.5 mt-1.5 text-[11px] text-on-surface-variant leading-[1.5]">
+                        <Icon name="info" className="text-[13px] leading-none mt-0.5 shrink-0" />
+                        {td.cuentaForm.avisoCorreo}
+                      </div>
+                      {editEmail.trim().toLowerCase() !== (usuario?.email || '').toLowerCase() && emailPaso === 'idle' && (
+                        <button type="button" onClick={solicitarCambioCorreo}
+                          className="mt-2 border border-outline-variant hover:bg-surface-container-high/40 px-3 py-2 rounded-lg text-[12px] font-display font-semibold text-on-surface transition-colors">
+                          {td.cuentaForm.enviarCodigo}
+                        </button>
+                      )}
+                      {emailPaso === 'codigo' && (
+                        <div className="mt-3 border border-outline-variant rounded-lg p-3.5">
+                          <p className="text-[12px] text-on-surface-variant mb-2">{td.cuentaForm.codigoEnviado(editEmail.trim())}</p>
+                          <div className="flex items-center justify-center gap-2">
+                            <input type="text" inputMode="numeric" value={emailCodigo}
+                              onChange={(e) => setEmailCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                              placeholder="000000" maxLength={6}
+                              className="w-28 bg-surface-container-high/50 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface text-center tracking-[0.3em] outline-none" />
+                            <button type="button" onClick={confirmarCambioCorreo} disabled={emailCodigo.length !== 6}
+                              className="bg-primary text-on-primary px-3 py-2 rounded-lg text-[12px] font-display font-semibold transition-all active:scale-[0.98] disabled:opacity-50">
+                              {td.cuentaForm.confirmarCorreo}
+                            </button>
+                            <button type="button" onClick={() => { setEmailPaso('idle'); setEditEmail(usuario?.email || '') }}
+                              className="px-2 py-2 text-[12px] font-display text-on-surface-variant hover:text-on-surface transition-colors">
+                              {td.cuentaForm.cancelar}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[13px] text-on-surface-variant mt-1">{usuario?.email}</p>
+                  )}
+
+                  {/* Acción: Editar ↔ Guardar/Cancelar, en el mismo lugar */}
+                  {cuentaEditando ? (
+                    <div className="flex items-center gap-2 mt-5">
+                      <button onClick={guardarCuenta} disabled={cuentaGuardando || !editNombre.trim()}
+                        className="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50">
+                        {cuentaGuardando ? td.cuentaForm.guardando : td.cuentaForm.guardar}
+                      </button>
+                      <button onClick={() => { setCuentaEditando(false); setSettingsMsg(''); abrirSettings('editar-cuenta') }}
+                        className="px-4 py-2.5 text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors">
+                        {td.cuentaForm.cancelar}
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setCuentaEditando(true); setSettingsMsg('') }}
+                      className="mt-5 bg-primary text-on-primary px-6 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5">
+                      <Icon name="edit" className="text-[15px] leading-none" />
+                      {td.cuentaForm.editar}
+                    </button>
+                  )}
+                </div>
+
+                {/* Plan y límites */}
+                {usuario?.suscripcion && (
+                  <div className="mt-8">
+                    {/* Línea divisoria entre el perfil y el plan */}
+                    <div className="h-px bg-outline-variant mb-5" />
+                    <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-2">{td.card.plan}</p>
+                    <div className="space-y-2">
+                    <div className="flex items-center gap-3 border border-outline-variant rounded-xl p-3.5">
+                      <div className="w-9 h-9 rounded-lg bg-purple/8 flex items-center justify-center shrink-0">
+                        <Icon name="workspace_premium" className="text-purple text-[18px] leading-none" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-display font-semibold text-[13px] text-on-surface">Aliwa {usuario.suscripcion.plan}</p>
+                        <p className="text-[12px] text-on-surface-variant capitalize">
+                          {usuario.suscripcion.estado}
+                          {usuario.suscripcion.modalidad_pago && usuario.suscripcion.estado === 'activa' && (
+                            <> · {{
+                              mensual: 'Mensual automático',
+                              adelantado: 'Meses por adelantado',
+                              unico: 'Pago único',
+                            }[usuario.suscripcion.modalidad_pago] || usuario.suscripcion.modalidad_pago}</>
+                          )}
+                          {usuario.suscripcion.periodo_fin && usuario.suscripcion.estado === 'activa' && (
+                            <> · hasta {new Date(usuario.suscripcion.periodo_fin).toLocaleDateString(localeFecha)}</>
+                          )}
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => abrirSettings('suscripcion')}
+                        className="text-[12px] font-display font-semibold text-primary hover:underline shrink-0">
+                        {td.panel.suscripcion} →
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-3 border border-outline-variant rounded-xl p-3.5">
+                        <Icon name="group" className="text-on-surface-variant text-[18px] leading-none shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-display font-semibold text-[14px] text-on-surface">{usuario.suscripcion.qty_usuarios ?? '—'}</p>
+                          <p className="text-[11px] text-on-surface-variant">{td.cuentaForm.usuariosIncluidos}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 border border-outline-variant rounded-xl p-3.5">
+                        <Icon name="call" className="text-on-surface-variant text-[18px] leading-none shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-display font-semibold text-[14px] text-on-surface">{usuario.suscripcion.qty_numeros ?? '—'}</p>
+                          <p className="text-[11px] text-on-surface-variant">{td.cuentaForm.numerosWa}</p>
+                        </div>
+                      </div>
+                    </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="border border-outline-variant bg-surface-container rounded-2xl p-10 text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-purple/8 mb-4">
+                  <Icon name="settings" className="text-purple text-[22px]" />
+                </div>
+                <h3 className="font-display text-sm font-semibold mb-2">
+                  {{
+                    'editar-cuenta': td.panel.editarCuenta,
+                    'crear-usuarios': td.panel.crearUsuarios,
+                    'permisos': td.panel.permisos,
+                    'analitica-usuarios': td.panel.analitica,
+                    'historial-login': td.panel.historialLogin,
+                    'cambiar-password': td.panel.cambiarPassword,
+                  }[settingsTab] || td.panel.configuracion}
+                </h3>
+                <p className="text-[13px] text-on-surface-variant max-w-sm mx-auto leading-relaxed">
+                  {td.emptyState.texto}
+                </p>
+              </div>
+            )
+          ) : activeSection === 'setup' ? (
             <div className="max-w-xl">
               <div className="mb-6">
-                <h1 className="font-display text-xl font-bold mb-1">Configura tu negocio</h1>
-                <p className="text-[13px] text-on-surface-variant">Esta información aparecerá en tus mensajes, facturas y perfil.</p>
+                <h1 className="font-display text-xl font-bold mb-1">{td.setup.titulo}</h1>
+                <p className="text-[13px] text-on-surface-variant">{td.setup.subtitulo}</p>
               </div>
 
               {setupError && (
@@ -559,33 +955,33 @@ export default function DashboardPage() {
 
               <form onSubmit={guardarNegocio} className="space-y-4">
                 <div>
-                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">Nombre del negocio *</label>
-                  <input type="text" value={setupNombre} onChange={(e) => setSetupNombre(e.target.value)} placeholder="Ej: Estética María, Consultorio Dr. López" autoFocus
-                    className="w-full bg-surface-container rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">{td.setup.nombreLabel}</label>
+                  <input type="text" value={setupNombre} onChange={(e) => setSetupNombre(e.target.value)} placeholder={td.setup.nombrePlaceholder} autoFocus
+                    className="w-full bg-surface-container-high/50 rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                 </div>
 
                 <div className="relative">
-                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">Giro del negocio *</label>
+                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">{td.setup.giroLabel}</label>
                   <button
                     type="button"
                     onClick={() => { setGiroOpen(!giroOpen); setGiroBuscar('') }}
                     className="w-full flex items-center justify-between bg-surface-container hover:bg-surface-container-high/60 rounded-lg px-4 py-2.5 text-[13px] font-display text-on-surface outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
                   >
-                    <span className={setupGiro ? 'text-on-surface' : 'text-outline-variant'}>{setupGiro || 'Selecciona el giro'}</span>
+                    <span className={setupGiro ? 'text-on-surface' : 'text-outline-variant'}>{setupGiro || td.setup.seleccionaGiro}</span>
                     <Icon name={giroOpen ? 'expand_less' : 'expand_more'} className="text-on-surface-variant text-[18px]" />
                   </button>
                   {giroOpen && (
                     <>
                       <div className="fixed inset-0 z-30" onClick={() => setGiroOpen(false)} />
                       <div className="absolute z-40 left-0 right-0 mt-1 bg-surface-container-high rounded-lg overflow-hidden">
-                        <div className="px-3 py-2 border-b border-outline-variant/15">
-                          <div className="flex items-center gap-2 bg-surface-container-lowest rounded-md px-3 py-1.5">
+                        <div className="px-3 py-2 border-b border-outline-variant">
+                          <div className="flex items-center gap-2 bg-surface-container-high/40 rounded-md px-3 py-1.5">
                             <Icon name="search" className="text-on-surface-variant text-[16px] leading-none" />
                             <input
                               type="text"
                               value={giroBuscar}
                               onChange={(e) => setGiroBuscar(e.target.value)}
-                              placeholder="Buscar giro..."
+                              placeholder={td.setup.buscarGiro}
                               autoFocus
                               className="flex-1 bg-transparent text-[13px] font-display text-on-surface placeholder:text-outline-variant outline-none"
                             />
@@ -601,8 +997,8 @@ export default function DashboardPage() {
                                 onClick={() => { setSetupGiro(g); setGiroOpen(false) }}
                                 className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-display transition-colors ${
                                   setupGiro === g
-                                    ? 'bg-primary/5 text-primary font-semibold'
-                                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest'
+                                    ? 'bg-primary/3 text-selected font-bold'
+                                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
                                 }`}
                               >
                                 {setupGiro === g && <Icon name="check" className="text-[15px] leading-none" />}
@@ -610,7 +1006,7 @@ export default function DashboardPage() {
                               </button>
                             ))}
                           {girosNegocio.filter(g => g.toLowerCase().includes(giroBuscar.toLowerCase())).length === 0 && (
-                            <p className="px-3 py-3 text-[13px] text-on-surface-variant text-center">Sin resultados</p>
+                            <p className="px-3 py-3 text-[13px] text-on-surface-variant text-center">{td.setup.sinResultados}</p>
                           )}
                         </div>
                       </div>
@@ -620,145 +1016,105 @@ export default function DashboardPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">Teléfono</label>
+                    <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">{td.setup.telefonoLabel}</label>
                     <input type="tel" value={setupTelefono} onChange={(e) => setSetupTelefono(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="614 123 4567"
-                      className="w-full bg-surface-container rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                      className="w-full bg-surface-container-high/50 rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">Correo</label>
-                    <input type="email" value={setupCorreo} onChange={(e) => setSetupCorreo(e.target.value)} placeholder="contacto@minegocio.com"
-                      className="w-full bg-surface-container rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                    <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">{td.setup.correoLabel}</label>
+                    <input type="email" value={setupCorreo} onChange={(e) => setSetupCorreo(e.target.value)} placeholder={td.setup.correoPlaceholder}
+                      className="w-full bg-surface-container-high/50 rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">Dirección</label>
-                  <input type="text" value={setupDireccion} onChange={(e) => setSetupDireccion(e.target.value)} placeholder="Calle, número, colonia, ciudad"
-                    className="w-full bg-surface-container rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-1.5 tracking-wide uppercase">{td.setup.direccionLabel}</label>
+                  <input type="text" value={setupDireccion} onChange={(e) => setSetupDireccion(e.target.value)} placeholder={td.setup.direccionPlaceholder}
+                    className="w-full bg-surface-container-high/50 rounded-lg px-4 py-2.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                 </div>
 
                 <div className="flex items-center gap-3 pt-1">
                   <button type="submit" disabled={setupLoading || !setupNombre || !setupGiro}
                     className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5">
-                    {setupLoading ? 'Guardando...' : 'Guardar y continuar'}
+                    {setupLoading ? td.setup.guardando : td.setup.guardarContinuar}
                     {!setupLoading && <Icon name="arrow_forward" className="text-[15px]" />}
                   </button>
                   <button type="button" onClick={() => handleNav('dashboard')}
                     className="text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors">
-                    Omitir por ahora
+                    {td.setup.omitirAhora}
                   </button>
                 </div>
               </form>
             </div>
           ) : activeSection === 'setup-whatsapp' ? (
-            <div className="max-w-xl">
+            <div className="max-w-2xl">
               <div className="mb-6">
-                <h1 className="font-display text-xl font-bold mb-1">Conectar WhatsApp</h1>
-                <p className="text-[13px] text-on-surface-variant">Vincula tu número de WhatsApp Business para enviar y recibir mensajes desde Aliwa.</p>
+                <h1 className="font-display text-xl font-bold mb-1">{td.setupWhatsapp.titulo}</h1>
+                <p className="text-[13px] text-on-surface-variant">{td.setupWhatsapp.subtitulo}</p>
               </div>
-
-              {waError && (
-                <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 text-[13px] font-display">{waError}</div>
-              )}
-
-              {waConectado ? (
-                <div className="bg-surface-container rounded-2xl p-6 text-center">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-tertiary/10 mb-4">
-                    <Icon name="check_circle" className="text-tertiary text-[24px]" />
-                  </div>
-                  <h3 className="font-display font-semibold text-sm mb-2">WhatsApp conectado</h3>
-                  <p className="text-[13px] text-on-surface-variant mb-5">Tu número está listo para enviar y recibir mensajes.</p>
-                  <button
-                    onClick={() => handleNav('setup-team')}
-                    className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5 mx-auto"
-                  >
-                    Siguiente paso
-                    <Icon name="arrow_forward" className="text-[15px]" />
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Pasos */}
-                  <div className="bg-surface-container rounded-2xl p-5 space-y-3">
-                    {[
-                      { num: 1, text: 'Inicia sesión con tu cuenta de Facebook' },
-                      { num: 2, text: 'Selecciona o crea tu cuenta de WhatsApp Business' },
-                      { num: 3, text: 'Registra y verifica tu número de teléfono' },
-                    ].map((s) => (
-                      <div key={s.num} className="flex items-start gap-3">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                          <span className="text-[11px] font-display font-bold text-primary">{s.num}</span>
-                        </div>
-                        <p className="text-[13px] text-on-surface-variant">{s.text}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Info */}
-                  <div className="bg-surface-container rounded-2xl p-4 flex items-start gap-3">
-                    <Icon name="info" className="text-on-surface-variant text-[16px] mt-0.5 shrink-0 leading-none" />
-                    <p className="text-[12px] text-on-surface-variant leading-relaxed">
-                      Puedes usar un número nuevo o tu número de WhatsApp Business actual. Los números personales de WhatsApp Messenger deben desvincularse primero.
-                    </p>
-                  </div>
-
-                  {/* Botón */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={conectarWhatsApp}
-                      disabled={waLoading}
-                      className="bg-[#25D366] text-white px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-[#20bd5a] disabled:opacity-50 flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                      {waLoading ? 'Conectando...' : 'Conectar WhatsApp'}
-                    </button>
-                    <button
-                      onClick={() => handleNav('setup-team')}
-                      className="text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors"
-                    >
-                      Omitir por ahora
-                    </button>
-                  </div>
-                </div>
-              )}
+              <WhatsappSection
+                onConectado={() => {
+                  setWaConectado(true)
+                  apiFetch('/api/negocios/').then(({ res, data }) => {
+                    if (res.ok) {
+                      const lista = data.results || data || []
+                      setNegocios(lista)
+                      if (lista.length > 0) setNegocioActivo(lista[0])
+                    }
+                  }).catch(() => {})
+                }}
+                onSiguiente={() => handleNav('setup-team')}
+              />
             </div>
-          ) : ['setup-payments', 'setup-invoicing', 'setup-subscription'].includes(activeSection) ? (
+          ) : activeSection === 'setup-payments' ? (
             <div className="max-w-xl">
               <div className="mb-6">
                 <h1 className="font-display text-xl font-bold mb-1">{current.title}</h1>
                 <p className="text-[13px] text-on-surface-variant">{current.description}</p>
               </div>
-              <div className="bg-surface-container rounded-2xl p-8 text-center">
+              <OpenpaySection
+                negocio={negocioActivo}
+                onConectado={() => {
+                  apiFetch('/api/negocios/').then(({ res, data }) => {
+                    if (res.ok) {
+                      const lista = data.results || data || []
+                      setNegocios(lista)
+                      if (lista.length > 0) setNegocioActivo(lista[0])
+                    }
+                  }).catch(() => {})
+                }}
+                onSiguiente={() => handleNav('setup-invoicing')}
+                onOmitir={() => handleNav('dashboard')}
+              />
+            </div>
+          ) : ['setup-invoicing', 'setup-subscription'].includes(activeSection) ? (
+            <div className="max-w-xl">
+              <div className="mb-6">
+                <h1 className="font-display text-xl font-bold mb-1">{current.title}</h1>
+                <p className="text-[13px] text-on-surface-variant">{current.description}</p>
+              </div>
+              <div className="border border-outline-variant bg-surface-container rounded-2xl p-8 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-purple/8 mb-4">
                   <Icon name={{
-                    'setup-whatsapp': 'chat',
-                    'setup-team': 'group_add',
-                    'setup-payments': 'credit_card',
                     'setup-invoicing': 'description',
                     'setup-subscription': 'account_balance_wallet',
                   }[activeSection]} className="text-purple text-[22px]" />
                 </div>
                 <p className="text-[13px] text-on-surface-variant mb-6">
-                  Esta sección estará disponible pronto. Puedes continuar con el siguiente paso.
+                  {td.setupPlaceholder.disponible}
                 </p>
                 <div className="flex items-center justify-center gap-3">
                   {{
-                    'setup-whatsapp': 'setup-team',
-                    'setup-team': 'setup-payments',
-                    'setup-payments': 'setup-invoicing',
                     'setup-invoicing': 'setup-subscription',
                     'setup-subscription': null,
                   }[activeSection] ? (
                     <button
                       onClick={() => handleNav({
-                        'setup-whatsapp': 'setup-team',
-                        'setup-team': 'setup-payments',
-                        'setup-payments': 'setup-invoicing',
                         'setup-invoicing': 'setup-subscription',
                       }[activeSection])}
                       className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
                     >
-                      Siguiente paso
+                      {td.setupPlaceholder.siguiente}
                       <Icon name="arrow_forward" className="text-[15px]" />
                     </button>
                   ) : (
@@ -766,14 +1122,14 @@ export default function DashboardPage() {
                       onClick={() => handleNav('dashboard')}
                       className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
                     >
-                      Ir al Dashboard
+                      {td.setupPlaceholder.irDashboard}
                     </button>
                   )}
                   <button
                     onClick={() => handleNav('dashboard')}
                     className="text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors"
                   >
-                    Omitir
+                    {td.setupPlaceholder.omitir}
                   </button>
                 </div>
               </div>
@@ -785,7 +1141,7 @@ export default function DashboardPage() {
               <div className="mb-6">
                 <h1 className="font-display text-xl font-bold mb-1">
                   {activeSection === 'dashboard'
-                    ? `Bienvenida, ${nombreUsuario || ''}!`
+                    ? td.bienvenida(nombreUsuario || '')
                     : current.title
                   }
                 </h1>
@@ -808,24 +1164,34 @@ export default function DashboardPage() {
                       }}
                       className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
                     >
-                      Continuar
+                      {td.setupTeam.continuar}
                       <Icon name="arrow_forward" className="text-[15px]" />
                     </button>
                     <button
                       onClick={() => handleNav('dashboard')}
                       className="text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors"
                     >
-                      Omitir
+                      {td.setupTeam.omitir}
                     </button>
                   </div>
                 </>
+              )}
+
+              {/* Plantillas de mensajes de WhatsApp */}
+              {activeSection === 'customers' && <PlantillasSection />}
+
+              {/* Números de WhatsApp (gestión + perfil) */}
+              {activeSection === 'numbers' && (
+                <div className="max-w-2xl">
+                  <WhatsappSection gestion onConectado={() => setWaConectado(true)} />
+                </div>
               )}
 
               {/* Card de usuario + Soporte - solo en dashboard */}
               {activeSection === 'dashboard' && usuario && (
                 <div className="flex gap-3 mb-4">
                   {/* Card usuario */}
-                  <div className="flex-1 bg-surface-container rounded-2xl p-4">
+                  <div className="flex-1 border border-outline-variant bg-surface-container rounded-2xl p-4">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 rounded-xl bg-purple/10 flex items-center justify-center shrink-0">
                         <span className="text-purple font-display font-bold text-sm">
@@ -833,54 +1199,54 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <div>
-                        <h3 className="font-display font-bold text-sm">{usuario.nombre || 'Sin nombre'}</h3>
-                        <p className="text-[12px] text-on-surface-variant">{usuario.rol === 'owner' ? 'Propietario' : usuario.rol === 'admin' ? 'Administrador' : 'Agente'}</p>
+                        <h3 className="font-display font-bold text-sm">{usuario.nombre || td.card.sinNombre}</h3>
+                        <p className="text-[12px] text-on-surface-variant">{usuario.rol === 'owner' ? td.roles.owner : usuario.rol === 'admin' ? td.roles.admin : td.roles.agente}</p>
                       </div>
                     </div>
                     <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 ${!panelActivo && collapsed ? 'lg:grid-cols-4' : ''}`}>
-                      <div className="flex items-center gap-2.5 bg-surface-container-lowest rounded-lg px-3 py-2.5">
+                      <div className="flex items-center gap-2.5 bg-surface-container-high/40 rounded-lg px-3 py-2.5">
                         <Icon name="mail" className="text-on-surface-variant text-[16px] leading-none" />
                         <div className="min-w-0">
-                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">Correo</div>
+                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.card.correo}</div>
                           <div className="text-[13px] font-display truncate">{usuario.email}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2.5 bg-surface-container-lowest rounded-lg px-3 py-2.5">
+                      <div className="flex items-center gap-2.5 bg-surface-container-high/40 rounded-lg px-3 py-2.5">
                         <Icon name="account_balance_wallet" className="text-on-surface-variant text-[16px] leading-none" />
                         <div className="min-w-0">
-                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">Saldo</div>
+                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.card.saldo}</div>
                           <div className="text-[13px] font-display">$0.00 MXN</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2.5 bg-surface-container-lowest rounded-lg px-3 py-2.5">
+                      <div className="flex items-center gap-2.5 bg-surface-container-high/40 rounded-lg px-3 py-2.5">
                         <Icon name="workspace_premium" className="text-on-surface-variant text-[16px] leading-none" />
                         <div className="min-w-0">
-                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">Plan</div>
-                          <div className="text-[13px] font-display">{usuario.suscripcion?.plan || 'Sin plan'}</div>
+                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.card.plan}</div>
+                          <div className="text-[13px] font-display">{usuario.suscripcion?.plan || td.card.sinPlan}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2.5 bg-surface-container-lowest rounded-lg px-3 py-2.5">
+                      <div className="flex items-center gap-2.5 bg-surface-container-high/40 rounded-lg px-3 py-2.5">
                         <Icon name="timer" className="text-on-surface-variant text-[16px] leading-none" />
                         <div className="min-w-0">
-                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">Prueba gratis</div>
-                          <div className="text-[13px] font-display">{usuario.suscripcion?.prueba_termina_en ? `${Math.max(0, Math.ceil((new Date(usuario.suscripcion.prueba_termina_en) - new Date()) / 86400000))} días restantes` : '—'}</div>
+                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.card.pruebaGratis}</div>
+                          <div className="text-[13px] font-display">{usuario.suscripcion?.prueba_termina_en ? td.card.diasRestantes(Math.max(0, Math.ceil((new Date(usuario.suscripcion.prueba_termina_en) - new Date()) / 86400000))) : '—'}</div>
                         </div>
                       </div>
                     </div>
                   </div>
                   {/* Card soporte */}
-                  <div className="w-[200px] shrink-0 bg-surface-container rounded-2xl p-4 flex flex-col justify-center gap-3">
+                  <div className="w-[200px] shrink-0 border border-outline-variant bg-surface-container rounded-2xl p-4 flex flex-col justify-center gap-3">
                     <div className="flex items-center gap-2.5">
                       <img src="/icons/whatsapp.svg" alt="" className="w-4 h-4" />
                       <div className="min-w-0">
-                        <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">Soporte</div>
-                        <a href="https://wa.me/5218281184756" target="_blank" rel="noopener noreferrer" className="text-[13px] font-display text-[#25D366] hover:underline">+52 828 118 4756</a>
+                        <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.card.soporte}</div>
+                        <a href="https://wa.me/5218281184756" target="_blank" rel="noopener noreferrer" className="text-[13px] font-display text-primary hover:underline">+52 828 118 4756</a>
                       </div>
                     </div>
                     <div className="flex items-center gap-2.5">
                       <Icon name="rate_review" className="text-tertiary text-[16px] leading-none" />
                       <div className="min-w-0">
-                        <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">Feedback</div>
+                        <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.card.feedback}</div>
                         <a href="mailto:hola@aliwa.mx" className="text-[13px] font-display text-tertiary hover:underline">hola@aliwa.mx</a>
                       </div>
                     </div>
@@ -892,84 +1258,117 @@ export default function DashboardPage() {
               {activeSection === 'dashboard' && (() => {
                 const negocioConfigurado = negocioActivo?.giro
                 const guiaSteps = [
-                  { icon: 'check_circle', label: 'Crear cuenta', done: true, nav: null },
-                  { icon: 'storefront', label: 'Tu negocio', done: !!negocioConfigurado, nav: 'setup' },
-                  { icon: 'chat', label: 'WhatsApp', done: waConectado, nav: 'setup-whatsapp' },
-                  { icon: 'group_add', label: 'Tu equipo', done: equipoListo, nav: 'setup-team' },
-                  { icon: 'credit_card', label: 'Cobros', done: false, nav: 'setup-payments' },
-                  { icon: 'description', label: 'Facturación', done: false, nav: 'setup-invoicing' },
-                  { icon: 'account_balance_wallet', label: 'Suscripción', done: false, nav: 'setup-subscription' },
+                  { icon: 'person_add', label: td.guia.pasos[0], done: true, nav: null },
+                  { icon: 'add_business', label: td.guia.pasos[1], done: !!negocioConfigurado, nav: 'setup' },
+                  { icon: 'whatsapp', label: td.guia.pasos[2], done: waConectado, nav: 'setup-whatsapp' },
+                  { icon: 'group_add', label: td.guia.pasos[3], done: equipoListo, nav: 'setup-team' },
+                  { icon: 'assured_workload', label: td.guia.pasos[4], done: !!negocioActivo?.openpay_conectado, nav: 'setup-payments' },
+                  { icon: 'receipt_long', label: td.guia.pasos[5], done: false, nav: 'setup-invoicing' },
+                  { icon: 'add_card', label: td.guia.pasos[6], done: false, nav: 'setup-subscription' },
                 ]
                 const completados = guiaSteps.filter(s => s.done).length
                 const siguiente = guiaSteps.find(s => !s.done)
-                const pct = Math.round((completados / guiaSteps.length) * 100)
+                const ultimoHecho = guiaSteps.map(s => s.done).lastIndexOf(true)
+                // Track de centro a centro de columna: cada centro está en (i+0.5)/n
+                const margenTrack = (0.5 / guiaSteps.length) * 100
+                const fillPct = ultimoHecho <= 0 ? 0 : (ultimoHecho / (guiaSteps.length - 1)) * 100
 
                 return (
-                  <div className="bg-surface-container rounded-2xl p-5">
-                    <div className="flex items-center justify-between mb-1.5">
+                  <div className="border border-outline-variant bg-surface-container rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2.5">
                         <Icon name="rocket_launch" className="text-tertiary text-[16px] leading-none" />
-                        <h3 className="font-display font-bold text-sm">Guía de inicio</h3>
+                        <h3 className="font-display font-bold text-sm">{td.guia.titulo}</h3>
                       </div>
-                      <span className="text-[13px] font-display text-on-surface-variant">{completados} de {guiaSteps.length}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="flex-1 h-1 bg-surface-container-high rounded-full">
-                        <div className="h-full bg-tertiary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      <div className="flex items-center gap-3">
+                        <span className="text-[13px] font-display text-on-surface-variant">{td.guia.contador(completados, guiaSteps.length)}</span>
+                        {siguiente && (
+                          <button
+                            onClick={() => handleNav(siguiente.nav)}
+                            className="shrink-0 bg-primary text-on-primary px-4 py-2 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
+                          >
+                            {td.guia.siguiente}
+                            <Icon name="arrow_forward" className="text-[15px]" />
+                          </button>
+                        )}
                       </div>
-                      {siguiente && (
-                        <button
-                          onClick={() => handleNav(siguiente.nav)}
-                          className="shrink-0 bg-primary text-on-primary px-4 py-2 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
-                        >
-                          Siguiente paso
-                          <Icon name="arrow_forward" className="text-[15px]" />
-                        </button>
-                      )}
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
-                      {guiaSteps.map((step, i) => (
-                        <button
-                          key={i}
-                          onClick={() => step.nav && handleNav(step.nav)}
-                          className={`flex flex-col items-center gap-1.5 py-2.5 px-1.5 rounded-lg bg-surface-container-lowest transition-colors ${step.nav ? 'hover:bg-surface-container-high/60 cursor-pointer' : ''}`}
-                        >
-                          {step.done ? (
-                            <div className="w-8 h-8 rounded-full bg-tertiary flex items-center justify-center">
-                              <Icon name="check" className="text-on-tertiary text-[16px]" />
-                            </div>
-                          ) : (
-                            <div className="w-8 h-8 rounded-full border-2 border-outline-variant/40 flex items-center justify-center">
-                              <Icon name={step.icon} className="text-on-surface-variant text-[16px]" />
-                            </div>
-                          )}
-                          <span className={`text-[11px] font-display text-center leading-tight ${step.done ? 'text-tertiary font-semibold' : 'text-on-surface-variant'}`}>
-                            {step.label}
-                          </span>
-                        </button>
-                      ))}
+                    {/* Pasos con la barra de progreso sobrepuesta (pasa detrás de los círculos) */}
+                    <div className="relative">
+                      <div
+                        className="hidden lg:block absolute top-[26px] h-1 bg-surface-container-high rounded-full"
+                        style={{ left: `${margenTrack}%`, right: `${margenTrack}%` }}
+                      >
+                        <div className="h-full bg-tertiary rounded-full transition-all" style={{ width: `${fillPct}%` }} />
+                      </div>
+                      <div className="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
+                        {guiaSteps.map((step, i) => (
+                          <button
+                            key={i}
+                            onClick={() => step.nav && handleNav(step.nav)}
+                            className={`flex flex-col items-center gap-1.5 py-2.5 px-1.5 rounded-lg transition-colors ${step.nav ? 'hover:bg-surface-container-high/60 cursor-pointer' : ''}`}
+                          >
+                            {/* Completado: se resalta el ícono del paso (no se cambia por check).
+                                'whatsapp' usa el logo SVG coloreado vía máscara. */}
+                            {(() => {
+                              const iconoWa = (clase) => (
+                                <span
+                                  aria-hidden="true"
+                                  className={`w-4 h-4 inline-block ${clase}`}
+                                  style={{
+                                    WebkitMaskImage: 'url(/icons/whatsapp.svg)',
+                                    maskImage: 'url(/icons/whatsapp.svg)',
+                                    WebkitMaskRepeat: 'no-repeat',
+                                    maskRepeat: 'no-repeat',
+                                    WebkitMaskPosition: 'center',
+                                    maskPosition: 'center',
+                                    WebkitMaskSize: 'contain',
+                                    maskSize: 'contain',
+                                  }}
+                                />
+                              )
+                              return step.done ? (
+                                <div className="w-8 h-8 rounded-full bg-tertiary flex items-center justify-center">
+                                  {step.icon === 'whatsapp'
+                                    ? iconoWa('bg-on-tertiary')
+                                    : <Icon name={step.icon} fill className="text-on-tertiary text-[16px]" />}
+                                </div>
+                              ) : (
+                                <div className="w-8 h-8 rounded-full border-2 border-outline-variant bg-surface-container-lowest flex items-center justify-center">
+                                  {step.icon === 'whatsapp'
+                                    ? iconoWa('bg-on-surface-variant')
+                                    : <Icon name={step.icon} className="text-on-surface-variant text-[16px]" />}
+                                </div>
+                              )
+                            })()}
+                            <span className={`text-[11px] font-display text-center leading-tight ${step.done ? 'text-tertiary font-bold' : 'text-on-surface-variant'}`}>
+                              {step.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )
               })()}
 
               {/* Empty state - solo en secciones que no son dashboard */}
-              {activeSection !== 'dashboard' && activeSection !== 'setup-team' && (
-                <div className="bg-surface-container rounded-2xl p-10 text-center">
+              {!['dashboard', 'setup-team', 'customers', 'numbers'].includes(activeSection) && (
+                <div className="border border-outline-variant bg-surface-container rounded-2xl p-10 text-center">
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-purple/8 mb-4">
                     <Icon name={menuGroups.flatMap(g => g.items ? g.items : [g]).find(m => m.id === activeSection)?.icon || 'info'} className="text-purple text-[22px]" />
                   </div>
                   <h3 className="font-display text-sm font-semibold mb-2">
-                    {`${current.title} estará disponible pronto`}
+                    {td.emptyState.titulo(current.title)}
                   </h3>
                   <p className="text-[13px] text-on-surface-variant max-w-sm mx-auto leading-relaxed">
-                    Esta sección se activará cuando configures tu negocio.
+                    {td.emptyState.texto}
                   </p>
                   <button
                     onClick={() => handleNav('dashboard')}
                     className="mt-5 bg-primary text-on-primary px-5 py-2 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98]"
                   >
-                    Ir al Dashboard
+                    {td.emptyState.irDashboard}
                   </button>
                 </div>
               )}
@@ -977,26 +1376,24 @@ export default function DashboardPage() {
           )}
           </div>
 
-          {/* Panel lateral derecho */}
-          {panelActivo && (
-            <aside className="w-60 shrink-0 border-l border-outline-variant/15 bg-surface-container/50 flex flex-col overflow-hidden">
+          {/* Panel lateral derecho — exclusivo para notificaciones */}
+          {panelActivo === 'notificaciones' && (
+            <aside className="w-52 shrink-0 border-l border-outline-variant bg-surface-container flex flex-col overflow-hidden">
               {/* Header */}
               <div className="px-2.5 h-11 flex items-center shrink-0">
-                <h3 className="font-display font-bold text-[15px]">
-                  {panelActivo === 'notificaciones' ? 'Notificaciones' : 'Configuración'}
-                </h3>
+                <h3 className="font-display font-bold text-[15px]">{td.panel.notificaciones}</h3>
               </div>
 
               <div className="flex-1 overflow-y-auto px-2 pb-3">
 
                 {/* Notificaciones */}
-                {panelActivo === 'notificaciones' && (
+                {(
                   notifLoading ? (
-                    <div className="py-10 text-center text-[13px] text-on-surface-variant">Cargando...</div>
+                    <div className="py-10 text-center text-[13px] text-on-surface-variant">{td.panel.cargando}</div>
                   ) : notificaciones.length === 0 ? (
                     <div className="py-10 text-center">
                       <Icon name="notifications_none" className="text-outline-variant text-[28px] mb-1.5" />
-                      <p className="text-[13px] text-on-surface-variant">No tienes notificaciones</p>
+                      <p className="text-[13px] text-on-surface-variant">{td.panel.sinNotificaciones}</p>
                     </div>
                   ) : (
                     <div className="space-y-px">
@@ -1004,78 +1401,20 @@ export default function DashboardPage() {
                         <button
                           key={n.id}
                           onClick={() => !n.leida && marcarLeida(n.id)}
-                          className={`w-full text-left px-2 py-1.5 transition-colors ${!n.leida ? 'bg-primary/5 hover:bg-primary/8 cursor-pointer' : 'bg-surface-container-lowest'}`}
+                          className={`w-full text-left px-2 py-1.5 transition-colors ${!n.leida ? 'bg-primary/3 hover:bg-primary/5 cursor-pointer' : 'bg-surface-container-lowest'}`}
                         >
                           <div className="flex items-start gap-2">
-                            <Icon name={n.icono || 'info'} className={`text-[15px] mt-0.5 shrink-0 leading-none ${!n.leida ? 'text-primary' : 'text-on-surface-variant'}`} />
+                            <Icon name={n.icono || 'info'} className={`text-[15px] mt-0.5 shrink-0 leading-none ${!n.leida ? 'text-selected' : 'text-on-surface-variant'}`} />
                             <div className="min-w-0">
-                              <p className={`text-[13px] font-display leading-tight ${!n.leida ? 'font-semibold' : 'font-medium text-on-surface-variant'}`}>{n.titulo}</p>
+                              <p className={`text-[13px] font-display leading-tight ${!n.leida ? 'font-bold text-selected' : 'font-medium text-on-surface-variant'}`}>{n.titulo}</p>
                               <p className="text-[12px] text-on-surface-variant mt-0.5 leading-relaxed">{n.mensaje}</p>
-                              <p className="text-[11px] text-outline mt-1">{new Date(n.creada).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                              <p className="text-[11px] text-outline mt-1">{new Date(n.creada).toLocaleDateString(localeFecha, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                             </div>
                           </div>
                         </button>
                       ))}
                     </div>
                   )
-                )}
-
-                {/* Settings — menú de opciones agrupadas */}
-                {panelActivo === 'settings' && (
-                  <div className="space-y-2">
-                    {/* Cuenta */}
-                    <div>
-                      <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2">Cuenta</p>
-                      <div className="space-y-px">
-                        <button onClick={() => setSettingsTab('editar-cuenta')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="edit" className="text-[16px] leading-none" />
-                          Editar datos de la cuenta
-                        </button>
-                        <button onClick={() => setSettingsTab('cambiar-plan')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="workspace_premium" className="text-[16px] leading-none" />
-                          Cambiar plan
-                        </button>
-                        <button onClick={() => setSettingsTab('metodo-pago')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="credit_card" className="text-[16px] leading-none" />
-                          Modificar método de pago
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Gestión de usuarios */}
-                    <div>
-                      <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2">Gestión de usuarios</p>
-                      <div className="space-y-px">
-                        <button onClick={() => setSettingsTab('crear-usuarios')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="person_add" className="text-[16px] leading-none" />
-                          Crear usuarios
-                        </button>
-                        <button onClick={() => setSettingsTab('permisos')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="admin_panel_settings" className="text-[16px] leading-none" />
-                          Manejar permisos
-                        </button>
-                        <button onClick={() => setSettingsTab('analitica-usuarios')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="analytics" className="text-[16px] leading-none" />
-                          Analítica de usuarios
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Seguridad */}
-                    <div>
-                      <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2">Seguridad</p>
-                      <div className="space-y-px">
-                        <button onClick={() => setSettingsTab('historial-login')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="history" className="text-[16px] leading-none" />
-                          Mi historial de login
-                        </button>
-                        <button onClick={() => setSettingsTab('cambiar-password')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest transition-colors">
-                          <Icon name="lock" className="text-[16px] leading-none" />
-                          Cambiar contraseña
-                        </button>
-                      </div>
-                    </div>
-                  </div>
                 )}
               </div>
             </aside>

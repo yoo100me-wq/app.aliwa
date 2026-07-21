@@ -177,7 +177,7 @@ export default function SetupBusinessPage() {
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej: Estética María, Consultorio Dr. López"
                   autoFocus
-                  className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
 
@@ -213,7 +213,7 @@ export default function SetupBusinessPage() {
                     value={telefono}
                     onChange={(e) => setTelefono(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder="614 123 4567"
-                    className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
                 <div>
@@ -225,7 +225,7 @@ export default function SetupBusinessPage() {
                     value={correo}
                     onChange={(e) => setCorreo(e.target.value)}
                     placeholder="contacto@minegocio.com"
-                    className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   />
                 </div>
               </div>
@@ -239,7 +239,7 @@ export default function SetupBusinessPage() {
                   value={direccion}
                   onChange={(e) => setDireccion(e.target.value)}
                   placeholder="Calle, número, colonia, ciudad"
-                  className="w-full bg-surface-container rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
 
@@ -255,7 +255,7 @@ export default function SetupBusinessPage() {
                 </button>
 
                 {showFiscal && (
-                  <div className="mt-4 space-y-4 p-5 bg-surface-container rounded-2xl">
+                  <div className="mt-4 space-y-4 p-5 border border-outline-variant bg-surface-container rounded-2xl">
                     <p className="text-xs text-on-surface-variant mb-2">
                       Necesarios para emitir facturas CFDI a tus clientes. Puedes agregarlos después.
                     </p>

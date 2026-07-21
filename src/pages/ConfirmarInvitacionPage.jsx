@@ -60,7 +60,7 @@ export default function ConfirmarInvitacionPage() {
       <div className="w-full max-w-[440px]">
         <a href="/" className="inline-flex items-center gap-2.5 mb-12">
           <AliwaIcon size={40} />
-          <span className="text-2xl font-logo font-bold text-primary">Aliwa</span>
+          <span className="text-2xl font-logo font-bold text-primary dark:text-on-background">Aliwa</span>
         </a>
 
         {estado === 'cargando' && (
