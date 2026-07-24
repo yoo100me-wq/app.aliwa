@@ -28,6 +28,120 @@ function nombrePersona(p) {
   return p.nombre || `Lead ${p.codigo_contacto}`
 }
 
+const campo =
+  'w-full bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
+const label = 'block text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1'
+
+// Modal de alta manual: persona (nombres+apellidos) o empresa (nombre+giro)
+function ModalAgregar({ tipo, onGuardar, onClose }) {
+  const { t } = useLang()
+  const tc = t.contactos
+  const esPersona = tipo === 'personas'
+  const [form, setForm] = useState({
+    nombres: '', apellido_paterno: '', apellido_materno: '',
+    nombre: '', industria: '', telefono: '', correo: '',
+  })
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+  const set = (c, v) => setForm((f) => ({ ...f, [c]: v }))
+
+  const guardar = async () => {
+    setError('')
+    const nombre = esPersona
+      ? [form.nombres, form.apellido_paterno, form.apellido_materno].filter(Boolean).join(' ').trim()
+      : form.nombre.trim()
+    if (!nombre) {
+      setError(tc.errNombreRequerido)
+      return
+    }
+    setGuardando(true)
+    const payload = esPersona
+      ? {
+          nombre, nombres: form.nombres.trim(),
+          apellido_paterno: form.apellido_paterno.trim(),
+          apellido_materno: form.apellido_materno.trim(),
+          telefono: form.telefono.trim(), correo: form.correo.trim(),
+          origen: 'manual',
+        }
+      : {
+          nombre, industria: form.industria.trim(),
+          telefono: form.telefono.trim(), correo: form.correo.trim(),
+        }
+    const ok = await onGuardar(payload, setError)
+    setGuardando(false)
+    if (ok) onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-neutral/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="border border-outline-variant bg-surface-container rounded-2xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-display font-bold text-[15px] mb-4">
+          {esPersona ? tc.nuevoContacto : tc.nuevaEmpresa}
+        </h3>
+        <div className="space-y-3">
+          {esPersona ? (
+            <>
+              <div>
+                <label className={label}>{tc.lblNombres}</label>
+                <input className={campo} value={form.nombres} placeholder={tc.phNombres}
+                  onChange={(e) => set('nombres', e.target.value)} autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={label}>{tc.lblApellidoPaterno}</label>
+                  <input className={campo} value={form.apellido_paterno} placeholder={tc.phApellidoPaterno}
+                    onChange={(e) => set('apellido_paterno', e.target.value)} />
+                </div>
+                <div>
+                  <label className={label}>{tc.lblApellidoMaterno}</label>
+                  <input className={campo} value={form.apellido_materno} placeholder={tc.phApellidoMaterno}
+                    onChange={(e) => set('apellido_materno', e.target.value)} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className={label}>{tc.lblNombreEmpresa}</label>
+                <input className={campo} value={form.nombre} placeholder={tc.phNombreEmpresa}
+                  onChange={(e) => set('nombre', e.target.value)} autoFocus />
+              </div>
+              <div>
+                <label className={label}>{tc.lblIndustria}</label>
+                <input className={campo} value={form.industria} placeholder={tc.phIndustria}
+                  onChange={(e) => set('industria', e.target.value)} />
+              </div>
+            </>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={label}>{tc.lblTelefono}</label>
+              <input className={campo} value={form.telefono} placeholder={tc.phTelefono}
+                onChange={(e) => set('telefono', e.target.value)} />
+            </div>
+            <div>
+              <label className={label}>{tc.lblCorreo}</label>
+              <input type="email" className={campo} value={form.correo} placeholder={tc.phCorreo}
+                onChange={(e) => set('correo', e.target.value)} />
+            </div>
+          </div>
+          {error && <p className="text-[12px] text-error font-display">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-lg text-[13px] font-display font-semibold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-all">
+            {tc.cancelar}
+          </button>
+          <button onClick={guardar} disabled={guardando}
+            className="px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-40">
+            {guardando ? tc.guardando : tc.guardar}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ContactosSection() {
   const { t, lang } = useLang()
   const tc = t.contactos
@@ -37,6 +151,31 @@ export default function ContactosSection() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
+  const [agregando, setAgregando] = useState(false)
+
+  // POST al endpoint según el tab activo; agrega el registro a la lista.
+  const guardarNuevo = async (payload, setModalError) => {
+    const url = tab === 'personas' ? '/api/contactos/' : '/api/contactos/empresas/'
+    try {
+      const { res, data } = await apiFetch(url, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        if (tab === 'personas') setPersonas((prev) => [data, ...prev])
+        else setEmpresas((prev) => [data, ...prev])
+        return true
+      }
+      // data.error (duplicado) o errores de campo del serializer
+      const detalle = data?.error
+        || (data && typeof data === 'object' && Object.values(data).flat().find((v) => typeof v === 'string'))
+      setModalError(detalle || tc.errGuardar)
+      return false
+    } catch {
+      setModalError(tc.errGuardar)
+      return false
+    }
+  }
 
   useEffect(() => {
     let vivo = true
@@ -111,6 +250,13 @@ export default function ContactosSection() {
           ))}
         </div>
         <div className="flex-1" />
+        <button
+          onClick={() => setAgregando(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 shrink-0"
+        >
+          <Icon name="add" className="text-[16px] leading-none" />
+          {tab === 'personas' ? tc.agregarContacto : tc.agregarEmpresa}
+        </button>
         <div className="relative w-64">
           <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-outline-variant leading-none" />
           <input
@@ -234,6 +380,11 @@ export default function ContactosSection() {
           </table>
         )}
       </div>
+
+      {/* Modal de alta manual (persona o empresa según el tab) */}
+      {agregando && (
+        <ModalAgregar tipo={tab} onGuardar={guardarNuevo} onClose={() => setAgregando(false)} />
+      )}
     </div>
   )
 }
