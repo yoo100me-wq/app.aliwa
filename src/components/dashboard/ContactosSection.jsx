@@ -32,6 +32,33 @@ const campo =
   'w-full bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
 const label = 'block text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1'
 
+// Mapa de ladas por país. `prefijo` es lo que se antepone al número local
+// para formar el formato de WhatsApp (México lleva el 1 extra: 521...).
+const LADAS = [
+  { codigo: 'MX', nombre: 'México', bandera: '🇲🇽', lada: '+52', prefijo: '521' },
+  { codigo: 'US', nombre: 'Estados Unidos', bandera: '🇺🇸', lada: '+1', prefijo: '1' },
+  { codigo: 'GT', nombre: 'Guatemala', bandera: '🇬🇹', lada: '+502', prefijo: '502' },
+  { codigo: 'CO', nombre: 'Colombia', bandera: '🇨🇴', lada: '+57', prefijo: '57' },
+  { codigo: 'AR', nombre: 'Argentina', bandera: '🇦🇷', lada: '+54', prefijo: '54' },
+  { codigo: 'PE', nombre: 'Perú', bandera: '🇵🇪', lada: '+51', prefijo: '51' },
+  { codigo: 'CL', nombre: 'Chile', bandera: '🇨🇱', lada: '+56', prefijo: '56' },
+  { codigo: 'ES', nombre: 'España', bandera: '🇪🇸', lada: '+34', prefijo: '34' },
+]
+
+// Devuelve el teléfono en formato WhatsApp (prefijo+local). Si el usuario ya
+// escribió el número con lada (con o sin +), se respeta tal cual.
+function telefonoConLada(entrada, pais) {
+  const digitos = entrada.replace(/\D/g, '')
+  if (!digitos) return ''
+  const ladaDigitos = pais.lada.replace('+', '')
+  // Solo cuenta como "ya trae lada" si es MÁS largo que un número local
+  // (10 díg.): un local que empiece en 52 no debe confundirse con la lada.
+  if (digitos.length > 10 && (digitos.startsWith(pais.prefijo) || digitos.startsWith(ladaDigitos))) {
+    return digitos
+  }
+  return pais.prefijo + digitos
+}
+
 // Modal de alta manual: persona (nombres+apellidos) o empresa (nombre+giro)
 function ModalAgregar({ tipo, onGuardar, onClose }) {
   const { t } = useLang()
@@ -43,6 +70,7 @@ function ModalAgregar({ tipo, onGuardar, onClose }) {
   })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [pais, setPais] = useState(LADAS[0])  // default México
   const set = (c, v) => setForm((f) => ({ ...f, [c]: v }))
 
   const guardar = async () => {
@@ -55,17 +83,18 @@ function ModalAgregar({ tipo, onGuardar, onClose }) {
       return
     }
     setGuardando(true)
+    const telefono = telefonoConLada(form.telefono, pais)
     const payload = esPersona
       ? {
           nombre, nombres: form.nombres.trim(),
           apellido_paterno: form.apellido_paterno.trim(),
           apellido_materno: form.apellido_materno.trim(),
-          telefono: form.telefono.trim(), correo: form.correo.trim(),
+          telefono, correo: form.correo.trim(),
           origen: 'manual',
         }
       : {
           nombre, industria: form.industria.trim(),
-          telefono: form.telefono.trim(), correo: form.correo.trim(),
+          telefono, correo: form.correo.trim(),
         }
     const ok = await onGuardar(payload, setError)
     setGuardando(false)
@@ -116,8 +145,20 @@ function ModalAgregar({ tipo, onGuardar, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label}>{tc.lblTelefono}</label>
-              <input className={campo} value={form.telefono} placeholder={tc.phTelefono}
-                onChange={(e) => set('telefono', e.target.value)} />
+              <div className="flex gap-1.5">
+                <select
+                  className={`${campo} w-auto shrink-0 pr-1`}
+                  value={pais.codigo}
+                  onChange={(e) => setPais(LADAS.find((l) => l.codigo === e.target.value) || LADAS[0])}
+                  title={pais.nombre}
+                >
+                  {LADAS.map((l) => (
+                    <option key={l.codigo} value={l.codigo}>{l.bandera} {l.lada}</option>
+                  ))}
+                </select>
+                <input className={campo} value={form.telefono} placeholder={tc.phTelefono}
+                  onChange={(e) => set('telefono', e.target.value)} />
+              </div>
             </div>
             <div>
               <label className={label}>{tc.lblCorreo}</label>
