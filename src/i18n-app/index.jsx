@@ -9,8 +9,9 @@ import * as lead from './lead'
 import * as plantillas from './plantillas'
 import * as numeros from './numeros'
 import * as openpay from './openpay'
+import * as contactos from './contactos'
 
-const NAMESPACES = { dash, chats, equipo, lead, plantillas, numeros, openpay }
+const NAMESPACES = { dash, chats, equipo, lead, plantillas, numeros, openpay, contactos }
 
 function construirT(lang) {
   const t = {}

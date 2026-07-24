@@ -65,6 +65,7 @@ export default function ListaConversaciones({
   filtroAsignacion,
   filtroLectura,
   onCambiarLectura,
+  filtroNumero = 'todos',
   busqueda,
   onBuscar,
 }) {
@@ -83,6 +84,7 @@ export default function ListaConversaciones({
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
     return conversaciones.filter((conv) => {
+      if (filtroNumero !== 'todos' && conv.numero_telefono !== filtroNumero) return false
       if (!coincideAsignacion(conv, filtroAsignacion, usuarioId)) return false
       if (!coincideLectura(conv, filtroLectura)) return false
       if (q) {
@@ -91,7 +93,7 @@ export default function ListaConversaciones({
       }
       return true
     })
-  }, [conversaciones, filtroAsignacion, filtroLectura, busqueda, usuarioId])
+  }, [conversaciones, filtroAsignacion, filtroLectura, filtroNumero, busqueda, usuarioId])
 
   return (
     <div className="flex flex-col h-full">
@@ -163,16 +165,22 @@ export default function ListaConversaciones({
                   : 'hover:bg-surface-container-high/50'
               }`}
             >
-              {/* Avatar — color estable por contacto (Meta no da la foto real) */}
-              <div className={`w-8 h-8 ${colorAvatar(conv.cliente_telefono || conv.id)} flex items-center justify-center shrink-0`}>
-                {(conv.nombre_mostrar || '').startsWith('Lead ') ? (
-                  <Icon name="badge" className="text-[16px] leading-none" />
-                ) : (
-                  <span className="font-display font-semibold text-[12px]">
-                    {obtenerIniciales(conv.nombre_mostrar)}
-                  </span>
-                )}
-              </div>
+              {/* Avatar redondo. Meta NO expone la foto de WhatsApp del cliente
+                  (webhook solo da name + wa_id); se muestra la foto solo si el
+                  lead tiene una guardada en Aliwa, si no iniciales/ícono. */}
+              {conv.cliente_foto ? (
+                <img src={conv.cliente_foto} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className={`w-8 h-8 rounded-full ${colorAvatar(conv.cliente_telefono || conv.id)} flex items-center justify-center shrink-0`}>
+                  {(conv.nombre_mostrar || '').startsWith('Lead ') ? (
+                    <Icon name="person" className="text-[16px] leading-none" />
+                  ) : (
+                    <span className="font-display font-semibold text-[12px]">
+                      {obtenerIniciales(conv.nombre_mostrar)}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Info */}
               <div className="flex-1 min-w-0">

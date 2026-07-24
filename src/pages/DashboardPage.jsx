@@ -6,10 +6,11 @@ import useTheme from '../hooks/useTheme'
 import ConversacionesPanel from '../components/dashboard/ConversacionesPanel'
 import EquipoSection from '../components/dashboard/EquipoSection'
 import PlantillasSection from '../components/dashboard/PlantillasSection'
+import ContactosSection from '../components/dashboard/ContactosSection'
 import WhatsappSection from '../components/dashboard/WhatsappSection'
 import OpenpaySection from '../components/dashboard/OpenpaySection'
 import SuscripcionCheckout from '../components/dashboard/SuscripcionCheckout'
-import { apiFetch } from '../utils/api'
+import { apiFetch, NEGOCIO_STORAGE_KEY } from '../utils/api'
 import { initFacebookSDK } from '../utils/facebook'
 import { useLang } from '../i18n-app'
 
@@ -80,17 +81,26 @@ export default function DashboardPage() {
   const [setupCp, setSetupCp] = useState('')
   const [setupError, setSetupError] = useState('')
   const [setupLoading, setSetupLoading] = useState(false)
+  // true = "Agregar negocio" (crea uno nuevo); false = editar el negocio activo.
+  const [nuevoNegocio, setNuevoNegocio] = useState(false)
   const [giroOpen, setGiroOpen] = useState(false)
   const [giroBuscar, setGiroBuscar] = useState('')
   const [waConectado, setWaConectado] = useState(false)
+  // Números del negocio activo: fuente ÚNICA (evita que ConversacionesPanel y el
+  // mount vuelvan a pedir /api/whatsapp/numeros/). waConectado se deriva de aquí.
+  const [numeros, setNumeros] = useState([])
+  const [numerosCargados, setNumerosCargados] = useState(false)
   const [equipoListo, setEquipoListo] = useState(() => localStorage.getItem('aliwa-setup-team-done') === '1')
 
   const pageContent = td.paginas
   const current = pageContent[activeSection]
 
   useEffect(() => {
+    // /dashboard exige sesión: sin cookie válida, el backend responde 401 →
+    // redirigir a login (la ruta no es pública aunque el bundle sí lo sea).
     apiFetch('/api/auth/me/').then(({ res, data }) => {
       if (res.ok) setUsuario(data)
+      else if (res.status === 401 || res.status === 403) navigate('/login', { replace: true })
     }).catch(() => {})
     initFacebookSDK()
     apiFetch('/api/notificaciones/conteo/').then(({ res, data }) => {
@@ -100,16 +110,16 @@ export default function DashboardPage() {
       if (res.ok) {
         const lista = data.results || data || []
         setNegocios(lista)
-        if (lista.length > 0) setNegocioActivo(lista[0])
+        if (lista.length > 0) {
+          // Preferir el negocio persistido (última selección) si sigue existiendo.
+          let guardado = null
+          try { guardado = localStorage.getItem(NEGOCIO_STORAGE_KEY) } catch { /* ignore */ }
+          const inicial = lista.find((n) => n.id === guardado) || lista[0]
+          setNegocioActivo(inicial)
+        }
       }
     }).catch(() => {})
-    // Estado de WhatsApp: marca conectado si hay al menos un número activo
-    apiFetch('/api/whatsapp/numeros/').then(({ res, data }) => {
-      if (res.ok) {
-        const nums = data.results || data || []
-        setWaConectado(nums.some(n => n.estado === 'activo'))
-      }
-    }).catch(() => {})
+    // (los números se cargan en un efecto por-negocio; ver más abajo)
     // Si el panel de notificaciones quedó abierto (preferencia restaurada),
     // cargar su contenido al entrar.
     if (panelActivo === 'notificaciones') {
@@ -127,6 +137,29 @@ export default function DashboardPage() {
   useEffect(() => {
     localStorage.setItem('aliwa-panel-notif', panelActivo === 'notificaciones' ? '1' : '0')
   }, [panelActivo])
+  // Persistir el negocio activo: apiFetch lo lee para mandar X-Aliwa-Negocio,
+  // así el backend acota números/chats/plantillas al negocio seleccionado.
+  useEffect(() => {
+    if (negocioActivo?.id) localStorage.setItem(NEGOCIO_STORAGE_KEY, negocioActivo.id)
+  }, [negocioActivo])
+
+  // Fuente ÚNICA de números del negocio activo. Se recarga SOLO al cambiar de
+  // negocio (no en cada montaje de sección). waConectado se deriva de aquí.
+  const cargarNumeros = () => {
+    apiFetch('/api/whatsapp/numeros/').then(({ res, data }) => {
+      if (res.ok) {
+        const nums = data.results || data || []
+        setNumeros(nums)
+        setWaConectado(nums.some((n) => n.estado === 'activo'))
+      }
+    }).catch(() => {}).finally(() => setNumerosCargados(true))
+  }
+  useEffect(() => {
+    if (!negocioActivo?.id) return
+    setNumerosCargados(false)
+    cargarNumeros()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [negocioActivo?.id])
 
   const nombreUsuario = usuario?.nombre?.split(' ')[0] || ''
 
@@ -151,16 +184,20 @@ export default function DashboardPage() {
           nombre: setupNombre, giro: setupGiro, telefono: setupTelefono,
           correo: setupCorreo, direccion: setupDireccion, rfc: setupRfc,
           razon_social: setupRazonSocial, regimen_fiscal: setupRegimen, codigo_postal: setupCp,
+          // crear=true → nuevo negocio (no pisa); si edito, mando el id del activo.
+          ...(nuevoNegocio ? { crear: true } : (negocioActivo?.id ? { negocio_id: negocioActivo.id } : {})),
         }),
       })
       if (res.ok) {
-        // Recargar negocios y volver al dashboard
+        // Recargar negocios y dejar activo el recién creado/editado (data)
         const { res: r2, data: d2 } = await apiFetch('/api/negocios/')
         if (r2.ok) {
           const lista = d2.results || d2 || []
           setNegocios(lista)
-          if (lista.length > 0) setNegocioActivo(lista[0])
+          const activo = lista.find((n) => n.id === data.id) || lista[lista.length - 1]
+          if (activo) setNegocioActivo(activo)
         }
+        setNuevoNegocio(false)
         handleNav('setup-whatsapp')
       } else {
         setSetupError(data.error || td.setup.errConfigurar)
@@ -170,6 +207,15 @@ export default function DashboardPage() {
     } finally {
       setSetupLoading(false)
     }
+  }
+
+  // "Agregar negocio": limpia el formulario y entra al setup en modo creación.
+  const iniciarNuevoNegocio = () => {
+    setNuevoNegocio(true)
+    setSetupNombre(''); setSetupGiro(''); setSetupTelefono(''); setSetupCorreo(''); setSetupDireccion('')
+    setSetupRfc(''); setSetupRazonSocial(''); setSetupRegimen(''); setSetupCp(''); setSetupShowFiscal(false)
+    setSetupError('')
+    handleNav('setup')
   }
 
   const marcarLeida = async (id) => {
@@ -320,7 +366,7 @@ export default function DashboardPage() {
       {/* Sidebar group wrapper — la pestaña aparece al hacer hover */}
       <div className="group/sidebar">
         {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 z-40 bg-surface-container flex flex-col transition-all duration-300 ${
+        <aside className={`fixed inset-y-0 left-0 z-40 bg-surface-container border-r border-outline-variant flex flex-col transition-all duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${collapsed ? 'w-[64px]' : 'w-44'}`}>
 
@@ -463,14 +509,7 @@ export default function DashboardPage() {
                 </a>
               ) : (
                 <button
-                  onClick={() => {
-                    if (collapsed) {
-                      setCollapsed(false)
-                      if (negocios.length > 1) setNegocioMenuOpen(true)
-                    } else {
-                      if (negocios.length > 1) setNegocioMenuOpen(!negocioMenuOpen)
-                    }
-                  }}
+                  onClick={() => { if (collapsed) setCollapsed(false); setNegocioMenuOpen(true) }}
                   className={`w-full transition-colors hover:bg-surface-container-high/50 ${collapsed ? 'p-1.5 flex justify-center' : 'px-2.5 py-2'}`}
                 >
                   {collapsed ? (
@@ -486,46 +525,46 @@ export default function DashboardPage() {
                         <div className="text-[13px] font-display font-semibold truncate">{negocioActivo?.nombre || td.sidebar.miNegocio}</div>
                         <div className="text-[12px] text-on-surface-variant truncate">{negocioActivo?.giro || td.sidebar.sinConfigurar}</div>
                       </div>
-                      {negocios.length > 1 && (
-                        <Icon name="unfold_more" className="text-on-surface-variant text-[16px] shrink-0" />
-                      )}
+                      <Icon name="unfold_more" className="text-on-surface-variant text-[16px] shrink-0" />
                     </div>
                   )}
                 </button>
               )}
 
-              {negocioMenuOpen && negocios.length > 1 && (
+              {/* Popover discreto de negocios — anclado sobre el botón */}
+              {negocioMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setNegocioMenuOpen(false)} />
-                  <div className="absolute bottom-full left-0 right-0 z-50 mb-1 bg-surface-container-high overflow-hidden">
-                    <div className="px-2.5 py-2 border-b border-outline-variant">
-                      <span className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.sidebar.cambiarNegocio}</span>
-                    </div>
-                    {negocios.map((n) => (
+                  <div className={`fixed bottom-3 z-50 w-72 bg-surface-container-high border border-outline-variant rounded-xl overflow-hidden shadow-xl ${collapsed ? 'left-[70px]' : 'left-[182px]'}`}>
+                    <div className="p-1.5 space-y-0.5 max-h-[50vh] overflow-y-auto">
+                      {negocios.map((n) => {
+                        const activo = negocioActivo?.id === n.id
+                        return (
+                          <button
+                            key={n.id}
+                            onClick={() => { setNegocioActivo(n); setNegocioMenuOpen(false) }}
+                            className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${activo ? 'bg-primary/5' : 'hover:bg-surface-container-highest/50'}`}
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-purple/10 flex items-center justify-center shrink-0">
+                              <span className="text-purple font-display font-bold text-[11px]">{n.nombre?.[0]?.toUpperCase() || '?'}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-[13px] font-display font-semibold truncate ${activo ? 'text-primary' : ''}`}>{n.nombre}</div>
+                              {n.giro && <div className="text-[12px] text-on-surface-variant truncate">{n.giro}</div>}
+                            </div>
+                            {activo && <Icon name="check" className="text-primary text-[16px] shrink-0" />}
+                          </button>
+                        )
+                      })}
+                      {/* Agregar negocio — "+" punteado como en Números */}
                       <button
-                        key={n.id}
-                        onClick={() => {
-                          setNegocioActivo(n)
-                          setNegocioMenuOpen(false)
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors ${
-                          negocioActivo?.id === n.id ? 'bg-primary/5' : 'hover:bg-surface-container-highest/50'
-                        }`}
+                        onClick={() => { setNegocioMenuOpen(false); iniciarNuevoNegocio() }}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-outline-variant px-2 py-1.5 text-[12px] font-display font-semibold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50 transition-colors mt-0.5"
                       >
-                        <div className="w-7 h-7 bg-purple/10 flex items-center justify-center shrink-0">
-                          <span className="text-purple font-display font-bold text-[10px]">
-                            {n.nombre?.[0]?.toUpperCase() || '?'}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-display font-medium truncate">{n.nombre}</div>
-                          {n.giro && <div className="text-[12px] text-on-surface-variant truncate">{n.giro}</div>}
-                        </div>
-                        {negocioActivo?.id === n.id && (
-                          <Icon name="check" className="text-primary text-[16px] shrink-0" />
-                        )}
+                        <Icon name="add" className="text-[15px] leading-none" />
+                        {td.sidebar.agregarNegocio}
                       </button>
-                    ))}
+                    </div>
                   </div>
                 </>
               )}
@@ -683,8 +722,9 @@ export default function DashboardPage() {
             </aside>
           )}
 
-          {/* Contenido principal */}
-          <div className={`flex-1 min-w-0 overflow-y-auto ${activeSection === 'conversations' ? '' : 'px-4 md:px-6 pt-4 pb-6'}`}>
+          {/* Contenido principal. Chats, Plantillas y Números son full-bleed
+              (paneles a altura completa, sin padding); el resto lleva padding. */}
+          <div className={`flex-1 min-w-0 overflow-y-auto ${['conversations', 'customers', 'numbers'].includes(activeSection) ? '' : 'px-4 md:px-6 pt-4 pb-6'}`}>
           {activeSection === 'settings' ? (
             settingsTab === 'suscripcion' ? (
               <SuscripcionCheckout />
@@ -1135,18 +1175,34 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : activeSection === 'conversations' ? (
-            <ConversacionesPanel usuarioId={usuario?.id} />
+            // key por negocio: al cambiar de negocio, remonta y recarga sus datos.
+            <ConversacionesPanel key={negocioActivo?.id} usuarioId={usuario?.id} numeros={numeros} numerosCargados={numerosCargados} />
+          ) : activeSection === 'customers' ? (
+            <PlantillasSection key={negocioActivo?.id} />
+          ) : activeSection === 'leads' ? (
+            <ContactosSection key={negocioActivo?.id} />
+          ) : activeSection === 'numbers' ? (
+            <WhatsappSection key={negocioActivo?.id} gestion onCambio={cargarNumeros} />
           ) : (
             <>
-              <div className="mb-6">
-                <h1 className="font-display text-xl font-bold mb-1">
-                  {activeSection === 'dashboard'
-                    ? td.bienvenida(nombreUsuario || '')
-                    : current.title
-                  }
-                </h1>
-                <p className="text-[13px] text-on-surface-variant">{current.description}</p>
-              </div>
+              {/* Encabezado solo en dashboard y equipo. Plantillas/Números tienen
+                  el suyo, y las secciones genéricas ya muestran su título en el
+                  estado vacío centrado. */}
+              {['dashboard', 'setup-team'].includes(activeSection) && (
+                <div className="mb-6">
+                  <h1 className="font-display text-xl font-bold mb-1">
+                    {activeSection === 'dashboard'
+                      ? td.bienvenida(nombreUsuario || '')
+                      : current.title
+                    }
+                  </h1>
+                  <p className="text-[13px] text-on-surface-variant">
+                    {activeSection === 'dashboard' && negocioActivo?.nombre
+                      ? td.paginas.dashboard.resumenNegocio(negocioActivo.nombre)
+                      : current.description}
+                  </p>
+                </div>
+              )}
 
               {/* Tu equipo — usuarios existentes + agregar (con límite del plan) */}
               {activeSection === 'setup-team' && (
@@ -1175,16 +1231,6 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </>
-              )}
-
-              {/* Plantillas de mensajes de WhatsApp */}
-              {activeSection === 'customers' && <PlantillasSection />}
-
-              {/* Números de WhatsApp (gestión + perfil) */}
-              {activeSection === 'numbers' && (
-                <div className="max-w-2xl">
-                  <WhatsappSection gestion onConectado={() => setWaConectado(true)} />
-                </div>
               )}
 
               {/* Card de usuario + Soporte - solo en dashboard */}
@@ -1225,13 +1271,24 @@ export default function DashboardPage() {
                           <div className="text-[13px] font-display">{usuario.suscripcion?.plan || td.card.sinPlan}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2.5 bg-surface-container-high/40 rounded-lg px-3 py-2.5">
-                        <Icon name="timer" className="text-on-surface-variant text-[16px] leading-none" />
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{td.card.pruebaGratis}</div>
-                          <div className="text-[13px] font-display">{usuario.suscripcion?.prueba_termina_en ? td.card.diasRestantes(Math.max(0, Math.ceil((new Date(usuario.suscripcion.prueba_termina_en) - new Date()) / 86400000))) : '—'}</div>
-                        </div>
-                      </div>
+                      {(() => {
+                        // Vigencia calculada en el backend contra la tabla de pagos
+                        // (pagos_suscripcion): prueba | plan | desactivada.
+                        const v = usuario.suscripcion?.vigencia
+                        const etiqueta = v?.tipo === 'prueba' ? td.card.pruebaGratis : td.card.vigencia
+                        const valor = (!v || v.tipo === 'desactivada')
+                          ? td.card.desactivada
+                          : td.card.diasRestantes(v.dias)
+                        return (
+                          <div className="flex items-center gap-2.5 bg-surface-container-high/40 rounded-lg px-3 py-2.5">
+                            <Icon name="timer" className="text-on-surface-variant text-[16px] leading-none" />
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase">{etiqueta}</div>
+                              <div className="text-[13px] font-display">{valor}</div>
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                   {/* Card soporte */}
@@ -1305,8 +1362,11 @@ export default function DashboardPage() {
                         {guiaSteps.map((step, i) => (
                           <button
                             key={i}
-                            onClick={() => step.nav && handleNav(step.nav)}
-                            className={`flex flex-col items-center gap-1.5 py-2.5 px-1.5 rounded-lg transition-colors ${step.nav ? 'hover:bg-surface-container-high/60 cursor-pointer' : ''}`}
+                            // Paso completado (✓): bloqueado, no navega. Solo los
+                            // pendientes con destino son clickeables.
+                            disabled={step.done || !step.nav}
+                            onClick={() => !step.done && step.nav && handleNav(step.nav)}
+                            className={`flex flex-col items-center gap-1.5 py-2.5 px-1.5 rounded-lg transition-colors ${step.done ? 'cursor-default' : step.nav ? 'hover:bg-surface-container-high/60 cursor-pointer' : 'cursor-default'}`}
                           >
                             {/* Completado: se resalta el ícono del paso (no se cambia por check).
                                 'whatsapp' usa el logo SVG coloreado vía máscara. */}
@@ -1353,23 +1413,15 @@ export default function DashboardPage() {
               })()}
 
               {/* Empty state - solo en secciones que no son dashboard */}
-              {!['dashboard', 'setup-team', 'customers', 'numbers'].includes(activeSection) && (
-                <div className="border border-outline-variant bg-surface-container rounded-2xl p-10 text-center">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-purple/8 mb-4">
-                    <Icon name={menuGroups.flatMap(g => g.items ? g.items : [g]).find(m => m.id === activeSection)?.icon || 'info'} className="text-purple text-[22px]" />
-                  </div>
-                  <h3 className="font-display text-sm font-semibold mb-2">
+              {!['dashboard', 'setup-team', 'customers', 'numbers', 'leads'].includes(activeSection) && (
+                <div className="flex flex-col items-center justify-center text-center h-full min-h-[70vh]">
+                  <Icon name={menuGroups.flatMap(g => g.items ? g.items : [g]).find(m => m.id === activeSection)?.icon || 'info'} className="text-outline-variant text-[44px] mb-3" />
+                  <h3 className="font-display text-[15px] font-semibold mb-1">
                     {td.emptyState.titulo(current.title)}
                   </h3>
-                  <p className="text-[13px] text-on-surface-variant max-w-sm mx-auto leading-relaxed">
+                  <p className="text-[13px] text-on-surface-variant max-w-sm leading-relaxed">
                     {td.emptyState.texto}
                   </p>
-                  <button
-                    onClick={() => handleNav('dashboard')}
-                    className="mt-5 bg-primary text-on-primary px-5 py-2 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98]"
-                  >
-                    {td.emptyState.irDashboard}
-                  </button>
                 </div>
               )}
             </>

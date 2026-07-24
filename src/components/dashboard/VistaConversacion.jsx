@@ -157,7 +157,7 @@ function ModalInteractivo({ onEnviar, onClose }) {
 
 export default function VistaConversacion({
   conversacion, onEnviar, onEnviarMedia, onEnviarInteractivo, onEnviarPlantilla, onTyping,
-  cargando, onEditarLead,
+  cargando, onEditarLead, leadPanelAbierto,
 }) {
   const { lang, t } = useLang()
   const tc = t.chats
@@ -229,7 +229,7 @@ export default function VistaConversacion({
   if (!conversacion) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-on-surface-variant">
-        <Icon name="inbox_2" className="text-[64px] mb-4 text-on-surface-variant/40" />
+        <Icon name="inventory_2" className="text-[44px] mb-3 text-outline-variant" />
         <p className="font-display font-semibold text-[13px]">{tc.emptyChat}</p>
       </div>
     )
@@ -244,22 +244,40 @@ export default function VistaConversacion({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="group/chat relative flex flex-col h-full">
+      {/* Pestaña para abrir/cerrar el panel del lead — estilo lengüeta del sidebar */}
+      {onEditarLead && (
+        <button
+          onClick={onEditarLead}
+          title={tc.editarLead}
+          className={`hidden lg:flex absolute top-2 right-0 z-20
+            px-1 py-3 rounded-l-xl bg-surface-container-high
+            text-on-surface-variant hover:bg-primary/10 hover:text-primary
+            transition-all duration-300 items-center justify-center
+            ${leadPanelAbierto ? 'opacity-100 text-primary' : 'opacity-0 group-hover/chat:opacity-100'}`}
+        >
+          <Icon name={leadPanelAbierto ? 'chevron_right' : 'chevron_left'} className="text-[16px] leading-none" />
+        </button>
+      )}
       {/* Header */}
       {(() => {
         const nombre = conversacion.nombre_mostrar || conversacion.cliente_nombre || tc.sinNombre
         const esLead = nombre.startsWith('Lead ')
         return (
           <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-variant/20">
-            <div className={`w-10 h-10 ${colorAvatar(conversacion.cliente_telefono || conversacion.id)} flex items-center justify-center shrink-0`}>
-              {esLead ? (
-                <Icon name="badge" className="text-[20px] leading-none" />
-              ) : (
-                <span className="font-display font-semibold text-[13px]">
-                  {nombre[0].toUpperCase()}
-                </span>
-              )}
-            </div>
+            {conversacion.cliente_foto ? (
+              <img src={conversacion.cliente_foto} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className={`w-10 h-10 rounded-full ${colorAvatar(conversacion.cliente_telefono || conversacion.id)} flex items-center justify-center shrink-0`}>
+                {esLead ? (
+                  <Icon name="person" className="text-[20px] leading-none" />
+                ) : (
+                  <span className="font-display font-semibold text-[13px]">
+                    {nombre[0].toUpperCase()}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <h3 className="font-display font-semibold text-[13px] truncate">{nombre}</h3>
               <p className="text-[12px] text-on-surface-variant truncate">
@@ -277,13 +295,6 @@ export default function VistaConversacion({
               }`}>
                 {tc.estadoConversacion[conversacion.estado] || conversacion.estado}
               </span>
-              <button
-                onClick={onEditarLead}
-                title={tc.editarLead}
-                className="p-1 text-on-surface-variant hover:text-primary transition-colors"
-              >
-                <Icon name="edit" className="text-[16px] leading-none" />
-              </button>
             </div>
           </div>
         )
@@ -299,7 +310,7 @@ export default function VistaConversacion({
             <div className={`max-w-[75%] flex flex-col ${msg.tipo_remitente === 'cliente' ? 'items-start' : 'items-end'}`}>
             <div className={`px-4 py-2.5 rounded-2xl ${
               msg.tipo_remitente === 'cliente'
-                ? 'bg-surface-container-high'
+                ? 'bg-[#7a9a4e] text-white'
                 : msg.tipo_remitente === 'bot'
                 ? 'bg-tertiary/10'
                 : 'bg-primary text-on-primary'
@@ -339,7 +350,9 @@ export default function VistaConversacion({
                 msg.tipo_remitente === 'cliente' ? 'justify-end' : 'justify-end'
               }`}>
                 <span className={`text-[11px] ${
-                  msg.tipo_remitente === 'agente' ? 'opacity-70' : 'text-on-surface-variant'
+                  msg.tipo_remitente === 'agente' ? 'opacity-70'
+                    : msg.tipo_remitente === 'cliente' ? 'text-white/70'
+                    : 'text-on-surface-variant'
                 }`}>
                   {formatearHoraMensaje(msg.creado_en, locale)}
                 </span>

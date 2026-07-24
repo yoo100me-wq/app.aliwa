@@ -2,6 +2,8 @@
 // VistaConversacion, ConversacionesPanel. es = textos originales verbatim.
 export const es = {
   bandeja: 'Bandeja',
+  numero: 'Número',
+  todosNumeros: 'Todos',
   asignacion: 'Asignación',
   filtrosAsignacion: { mias: 'Mías', todas: 'Todas', sin_asignar: 'Sin asignar' },
   filtrosLectura: { todas: 'Todas', no_leidos: 'No leídos', leidos: 'Leídos' },
@@ -13,6 +15,8 @@ export const es = {
   sinMensajes: 'Sin mensajes',
   ayer: 'Ayer',
   emptyChat: 'Todo en orden, selecciona una conversación para comenzar',
+  sinNumeroTitulo: 'Conecta tu WhatsApp primero',
+  sinNumeroTexto: 'Para ver y responder mensajes, conecta un número de WhatsApp Business desde la sección Números.',
   sinNombre: 'Sin nombre',
   via: 'vía',
   estadoConversacion: { activa: 'activa', espera: 'espera', cerrada: 'cerrada' },
@@ -60,6 +64,8 @@ export const es = {
 
 export const en = {
   bandeja: 'Inbox',
+  numero: 'Number',
+  todosNumeros: 'All',
   asignacion: 'Assignment',
   filtrosAsignacion: { mias: 'Mine', todas: 'All', sin_asignar: 'Unassigned' },
   filtrosLectura: { todas: 'All', no_leidos: 'Unread', leidos: 'Read' },
@@ -71,6 +77,8 @@ export const en = {
   sinMensajes: 'No messages',
   ayer: 'Yesterday',
   emptyChat: 'All set — select a conversation to get started',
+  sinNumeroTitulo: 'Connect your WhatsApp first',
+  sinNumeroTexto: 'To see and reply to messages, connect a WhatsApp Business number from the Numbers section.',
   sinNombre: 'No name',
   via: 'via',
   estadoConversacion: { activa: 'active', espera: 'waiting', cerrada: 'closed' },

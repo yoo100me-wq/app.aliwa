@@ -36,6 +36,8 @@ export const es = {
   titulo: 'Plantillas de mensajes',
   subtitulo: 'Mensajes pre-aprobados por Meta para iniciar conversaciones fuera de la ventana de 24 horas.',
   nuevaPlantilla: 'Nueva plantilla',
+  nueva: 'Nueva',
+  seleccionaVacio: 'Selecciona una plantilla de la lista para ver su detalle, o crea una nueva.',
   cancelar: 'Cancelar',
 
   // Avisos y errores
@@ -134,6 +136,8 @@ export const en = {
   titulo: 'Message templates',
   subtitulo: 'Meta pre-approved messages to start conversations outside the 24-hour window.',
   nuevaPlantilla: 'New template',
+  nueva: 'New',
+  seleccionaVacio: 'Select a template from the list to see its details, or create a new one.',
   cancelar: 'Cancel',
 
   // Notices and errors

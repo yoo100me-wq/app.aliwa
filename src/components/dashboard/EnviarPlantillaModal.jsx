@@ -54,7 +54,7 @@ export default function EnviarPlantillaModal({ masivo = false, plantillaInicial 
     if (masivo) {
       // Cargar hasta 100 clientes (la API pagina de 20 en 20)
       const cargarClientes = async () => {
-        let url = '/api/clientes/'
+        let url = '/api/contactos/'
         const acumulado = []
         for (let i = 0; i < 5 && url; i++) {
           const { res, data } = await apiFetch(url)

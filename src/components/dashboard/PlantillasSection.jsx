@@ -76,16 +76,6 @@ function VistaPrevia({ encabezado, cuerpo, pie, botones }) {
           ))}
         </div>
       )}
-
-      {/* Modal de envío masivo */}
-      {plantillaEnviar && (
-        <EnviarPlantillaModal
-          masivo
-          plantillaInicial={plantillaEnviar}
-          onEnviar={enviarMasivo}
-          onClose={() => setPlantillaEnviar(null)}
-        />
-      )}
     </div>
   )
 }
@@ -109,14 +99,14 @@ export default function PlantillasSection() {
   const tp = t.plantillas
   const [plantillas, setPlantillas] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [abierto, setAbierto] = useState(false)
+  const [creando, setCreando] = useState(false)       // panel derecho = formulario
+  const [seleccionada, setSeleccionada] = useState('') // panel derecho = detalle (nombre)
   const [form, setForm] = useState(FORM_VACIO)
   const [ejemplos, setEjemplos] = useState({})
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
   const [confirmando, setConfirmando] = useState('')
-  const [expandida, setExpandida] = useState('')
   const [plantillaEnviar, setPlantillaEnviar] = useState(null)
   const [sinNumero, setSinNumero] = useState(false)
 
@@ -201,7 +191,7 @@ export default function PlantillasSection() {
         setAviso(tp.avisoEnviada(data.nombre))
         setForm(FORM_VACIO)
         setEjemplos({})
-        setAbierto(false)
+        setCreando(false)
         cargar()
       } else {
         setError(data?.error || tp.errCrear)
@@ -218,62 +208,43 @@ export default function PlantillasSection() {
     setConfirmando('')
     if (res.ok) {
       setPlantillas((prev) => prev.filter((p) => p.name !== nombre))
+      if (seleccionada === nombre) setSeleccionada('')
       setAviso(tp.avisoEliminada(nombre))
     } else {
       setError(data?.error || tp.errEliminar)
     }
   }
 
+  const abrirNueva = () => { setCreando(true); setSeleccionada(''); setError(''); setAviso('') }
+  const seleccionar = (nombre) => { setSeleccionada(nombre); setCreando(false); setError(''); setAviso('') }
+  const plantillaSel = plantillas.find((p) => p.name === seleccionada) || null
+
   if (sinNumero) {
     return (
-      <div className="border border-outline-variant bg-surface-container rounded-2xl p-10 text-center max-w-2xl">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-purple/8 mb-4">
-          <Icon name="stacks" className="text-purple text-[22px]" />
+      <div className="flex h-full items-center justify-center px-6">
+        <div className="flex flex-col items-center text-center max-w-sm">
+          <Icon name="stacks" className="text-outline-variant text-[44px] mb-3" />
+          <h3 className="font-display text-[15px] font-semibold mb-1">{tp.sinNumeroTitulo}</h3>
+          <p className="text-[13px] text-on-surface-variant leading-relaxed">
+            {tp.sinNumeroTexto}
+          </p>
         </div>
-        <h3 className="font-display text-sm font-semibold mb-2">{tp.sinNumeroTitulo}</h3>
-        <p className="text-[13px] text-on-surface-variant max-w-sm mx-auto leading-relaxed">
-          {tp.sinNumeroTexto}
-        </p>
       </div>
     )
   }
 
-  return (
-    <div className="border border-outline-variant bg-surface-container rounded-2xl p-5 max-w-3xl">
-      {/* Encabezado */}
-      <div className="flex items-center justify-between gap-4 mb-4">
-        <div>
-          <h3 className="font-display font-bold text-[15px]">{tp.titulo}</h3>
-          <p className="text-[12px] text-on-surface-variant mt-0.5">
-            {tp.subtitulo}
-          </p>
-        </div>
-        <button
-          onClick={() => setAbierto((v) => !v)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90"
-        >
-          <Icon name={abierto ? 'close' : 'add'} className="text-[16px] leading-none" />
-          {abierto ? tp.cancelar : tp.nuevaPlantilla}
+  // ---- Bloque del formulario (panel derecho cuando se crea) ----
+  const formulario = (
+    <div className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-display font-bold text-[15px]">{tp.nuevaPlantilla}</h3>
+        <button onClick={() => setCreando(false)} title={tp.cancelar}
+          className="text-on-surface-variant hover:text-on-surface p-1">
+          <Icon name="close" className="text-[18px] leading-none" />
         </button>
       </div>
-
-      {aviso && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl bg-accent/15 px-3 py-2.5">
-          <Icon name="check_circle" className="text-on-accent text-[16px] leading-none mt-0.5" />
-          <p className="text-[12px] text-on-surface">{aviso}</p>
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl bg-error/10 px-3 py-2.5">
-          <Icon name="error" className="text-error text-[16px] leading-none mt-0.5" />
-          <p className="text-[12px] text-error">{error}</p>
-        </div>
-      )}
-
-      {/* Formulario nueva plantilla + vista previa en vivo */}
-      {abierto && (
-        <div className="bg-surface-container-lowest/60 dark:bg-surface-container-high/25 rounded-xl p-4 mb-4 grid md:grid-cols-[1fr_230px] gap-5">
-          <div className="space-y-3 min-w-0">
+      <div className="grid lg:grid-cols-[1fr_230px] gap-5">
+        <div className="space-y-3 min-w-0">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label}>{tp.labelNombre}</label>
@@ -403,102 +374,183 @@ export default function PlantillasSection() {
             <Icon name="send" className="text-[15px] leading-none" />
             {guardando ? tp.enviando : tp.enviarRevision}
           </button>
-          </div>
-
-          {/* Vista previa en vivo */}
-          <div className="min-w-0">
-            <label className={label}>{tp.vistaPrevia}</label>
-            <VistaPrevia {...previa} />
-            <p className="text-[11px] text-on-surface-variant mt-2 leading-relaxed">
-              {tp.vistaPreviaNota}
-            </p>
-          </div>
         </div>
-      )}
 
-      {/* Lista */}
-      {cargando ? (
-        <p className="text-[13px] text-on-surface-variant py-6 text-center">{tp.cargando}</p>
-      ) : plantillas.length === 0 ? (
-        <p className="text-[13px] text-on-surface-variant py-6 text-center">
-          {tp.vacio}
-        </p>
-      ) : (
-        <div className="space-y-px">
-          {plantillas.map((p, i) => {
-            const estadoLabel = tp.estados[p.status] || p.status
-            const estadoClase = ESTADO_CLASES[p.status] || 'bg-outline-variant/20 text-on-surface-variant'
-            const cuerpo = (p.components || []).find((c) => c.type === 'BODY')?.text || ''
-            return (
-              <div key={p.id || `${p.name}-${p.language}`}>
-                {i > 0 && <div className="h-px bg-outline-variant" />}
-                <div className="flex items-center gap-3 py-2.5 px-2 group">
-                  <div
-                    className="flex-1 min-w-0 cursor-pointer"
-                    onClick={() => setExpandida(expandida === p.name ? '' : p.name)}
+        {/* Vista previa en vivo */}
+        <div className="min-w-0">
+          <label className={label}>{tp.vistaPrevia}</label>
+          <VistaPrevia {...previa} />
+          <p className="text-[11px] text-on-surface-variant mt-2 leading-relaxed">
+            {tp.vistaPreviaNota}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ---- Bloque del detalle (panel derecho cuando hay selección) ----
+  const detalle = plantillaSel && (
+    <div className="p-5">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-display font-bold text-[15px] truncate">{plantillaSel.name}</h3>
+            <span className={`shrink-0 text-[10px] font-display font-semibold px-1.5 py-0.5 rounded-full ${ESTADO_CLASES[plantillaSel.status] || 'bg-outline-variant/20 text-on-surface-variant'}`}>
+              {tp.estados[plantillaSel.status] || plantillaSel.status}
+            </span>
+          </div>
+          <p className="text-[12px] text-on-surface-variant mt-0.5">
+            {tp.categorias[plantillaSel.category] || plantillaSel.category} · {plantillaSel.language}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {plantillaSel.status === 'APPROVED' && (
+            <button
+              onClick={() => { setPlantillaEnviar(plantillaSel); setError(''); setAviso('') }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-[12px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90"
+            >
+              <Icon name="send" className="text-[15px] leading-none" />
+              {tp.envio.enviar}
+            </button>
+          )}
+          {confirmando === plantillaSel.name ? (
+            <>
+              <button onClick={() => eliminar(plantillaSel.name)} className="text-[12px] font-display font-semibold text-error hover:opacity-80 px-2 py-1">{tp.eliminar}</button>
+              <button onClick={() => setConfirmando('')} className="text-[12px] font-display text-on-surface-variant hover:text-on-surface px-2 py-1">{tp.cancelar}</button>
+            </>
+          ) : (
+            <button
+              onClick={() => { setConfirmando(plantillaSel.name); setError(''); setAviso('') }}
+              title={tp.eliminarTitulo}
+              className="text-on-surface-variant hover:text-error p-1.5"
+            >
+              <Icon name="delete" className="text-[16px] leading-none" />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="max-w-[320px]">
+        <VistaPrevia {...previaDeComponents(plantillaSel.components, tp.copiarCodigo)} />
+      </div>
+    </div>
+  )
+
+  // Sin plantillas (y sin estar creando una): estado vacío a pantalla completa,
+  // solo ícono + frase centrada, sin los paneles de dos columnas.
+  if (!cargando && plantillas.length === 0 && !creando) {
+    return (
+      <div className="flex h-full items-center justify-center px-6">
+        <div className="flex flex-col items-center text-center">
+          <Icon name="stacks" className="text-outline-variant text-[44px] mb-3" />
+          <p className="text-[13px] text-on-surface-variant max-w-xs mb-5">{tp.vacio}</p>
+          <button
+            onClick={abrirNueva}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90"
+          >
+            <Icon name="add" className="text-[16px] leading-none" />
+            {tp.nuevaPlantilla}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="flex h-full">
+        {/* IZQUIERDA: lista de tarjetas */}
+        <aside className="w-[300px] shrink-0 bg-surface-container-lowest border-r border-outline-variant flex flex-col overflow-hidden">
+          <div className="flex items-center px-3 h-11 shrink-0">
+            <h3 className="font-display font-bold text-[15px] truncate">{tp.titulo}</h3>
+          </div>
+          <div className="h-px bg-outline-variant" />
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {cargando ? (
+              <p className="text-[13px] text-on-surface-variant py-6 text-center">{tp.cargando}</p>
+            ) : plantillas.length === 0 ? (
+              <p className="text-[13px] text-on-surface-variant py-6 px-3 text-center">{tp.vacio}</p>
+            ) : (
+              plantillas.map((p) => {
+                const activo = seleccionada === p.name && !creando
+                const estadoClase = ESTADO_CLASES[p.status] || 'bg-outline-variant/20 text-on-surface-variant'
+                return (
+                  <button
+                    key={p.id || `${p.name}-${p.language}`}
+                    onClick={() => seleccionar(p.name)}
+                    className={`w-full text-left rounded-lg px-2.5 py-2 transition-colors ${
+                      activo ? 'bg-primary/5' : 'hover:bg-surface-container-high/50'
+                    }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-display font-semibold truncate">{p.name}</span>
-                      <span className={`text-[10px] font-display font-semibold px-1.5 py-0.5 rounded-full ${estadoClase}`}>
-                        {estadoLabel}
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[13px] font-display font-semibold truncate ${activo ? 'text-primary' : ''}`}>{p.name}</span>
+                      <span className={`shrink-0 text-[10px] font-display font-semibold px-1.5 py-0.5 rounded-full ${estadoClase}`}>
+                        {tp.estados[p.status] || p.status}
                       </span>
-                      <Icon
-                        name={expandida === p.name ? 'expand_less' : 'expand_more'}
-                        className="text-[15px] leading-none text-on-surface-variant"
-                      />
                     </div>
                     <p className="text-[12px] text-on-surface-variant truncate mt-0.5">
-                      {tp.categorias[p.category] || p.category} · {p.language}{cuerpo ? ` · ${cuerpo}` : ''}
+                      {tp.categorias[p.category] || p.category} · {p.language}
                     </p>
-                  </div>
-                  {confirmando === p.name ? (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => eliminar(p.name)}
-                        className="text-[12px] font-display font-semibold text-error hover:opacity-80 px-2 py-1"
-                      >
-                        {tp.eliminar}
-                      </button>
-                      <button
-                        onClick={() => setConfirmando('')}
-                        className="text-[12px] font-display text-on-surface-variant hover:text-on-surface px-2 py-1"
-                      >
-                        {tp.cancelar}
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                    {p.status === 'APPROVED' && (
-                      <button
-                        onClick={() => { setPlantillaEnviar(p); setError(''); setAviso('') }}
-                        title={tp.envio.enviarTitulo}
-                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant hover:text-purple p-1"
-                      >
-                        <Icon name="send" className="text-[16px] leading-none" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => { setConfirmando(p.name); setError(''); setAviso('') }}
-                      title={tp.eliminarTitulo}
-                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant hover:text-error p-1"
-                    >
-                      <Icon name="delete" className="text-[16px] leading-none" />
-                    </button>
-                    </>
-                  )}
-                </div>
+                  </button>
+                )
+              })
+            )}
 
-                {/* Vista previa de la plantilla existente */}
-                {expandida === p.name && (
-                  <div className="px-2 pb-3 max-w-[300px]">
-                    <VistaPrevia {...previaDeComponents(p.components, tp.copiarCodigo)} />
-                  </div>
-                )}
-              </div>
-            )
-          })}
+            {/* Botón "+" con contorno punteado para crear una plantilla */}
+            {!cargando && (
+              <button
+                onClick={abrirNueva}
+                className={`w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed px-2.5 py-2 text-[12px] font-display font-semibold transition-colors mt-1 ${
+                  creando
+                    ? 'border-primary/40 text-primary bg-primary/5'
+                    : 'border-outline-variant text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
+                }`}
+              >
+                <Icon name="add" className="text-[16px] leading-none" />
+                {tp.nuevaPlantilla}
+              </button>
+            )}
+          </div>
+        </aside>
+
+        {/* DERECHA: detalle o formulario del elemento seleccionado */}
+        <div className="flex-1 min-w-0 bg-surface-container overflow-y-auto">
+          {(aviso || error) && (
+            <div className="p-4 pb-0 space-y-2">
+              {aviso && (
+                <div className="flex items-start gap-2 rounded-xl bg-accent/15 px-3 py-2.5">
+                  <Icon name="check_circle" className="text-on-accent text-[16px] leading-none mt-0.5" />
+                  <p className="text-[12px] text-on-surface">{aviso}</p>
+                </div>
+              )}
+              {error && (
+                <div className="flex items-start gap-2 rounded-xl bg-error/10 px-3 py-2.5">
+                  <Icon name="error" className="text-error text-[16px] leading-none mt-0.5" />
+                  <p className="text-[12px] text-error">{error}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {creando ? formulario : plantillaSel ? detalle : (
+            <div className="h-full flex flex-col items-center justify-center text-center p-10">
+              <Icon name="stacks" className="text-outline-variant text-[40px] mb-3" />
+              <p className="text-[13px] text-on-surface-variant max-w-xs">
+                {plantillas.length === 0 ? tp.vacio : tp.seleccionaVacio}
+              </p>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Modal de envío masivo */}
+      {plantillaEnviar && (
+        <EnviarPlantillaModal
+          masivo
+          plantillaInicial={plantillaEnviar}
+          onEnviar={enviarMasivo}
+          onClose={() => setPlantillaEnviar(null)}
+        />
       )}
-    </div>
+    </>
   )
 }

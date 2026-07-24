@@ -4,9 +4,10 @@ import FiltrosConversaciones from './FiltrosConversaciones'
 import ListaConversaciones from './ListaConversaciones'
 import VistaConversacion from './VistaConversacion'
 import LeadPanel from './LeadPanel'
+import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
 
-export default function ConversacionesPanel({ usuarioId }) {
+export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCargados = false }) {
   const { t } = useLang()
   const tc = t.chats
   const [conversaciones, setConversaciones] = useState([])
@@ -17,7 +18,31 @@ export default function ConversacionesPanel({ usuarioId }) {
   // Filtros
   const [filtroAsignacion, setFiltroAsignacion] = useState('todas')
   const [filtroLectura, setFiltroLectura] = useState('todas')
+  const [filtroNumero, setFiltroNumero] = useState('todos')
   const [busqueda, setBusqueda] = useState('')
+
+  // Números activos del negocio (para el filtro de bandeja). Vienen del padre
+  // (DashboardPage), fuente única — evita re-pedir /api/whatsapp/numeros/ aquí.
+  const numerosCuenta = useMemo(() => (numeros || [])
+    .filter((n) => n.estado === 'activo' && n.numero_telefono)
+    .map((n) => ({ telefono: n.numero_telefono, nombre: n.nombre_visible || '' })), [numeros])
+
+  // Sin número activo conectado: pedir conectar uno antes de mostrar la bandeja.
+  const sinNumero = numerosCargados && numerosCuenta.length === 0
+
+  // Opciones del filtro de número ({telefono, nombre}): unión de los números
+  // activos de la cuenta y los que aparecen en conversaciones (por si alguno
+  // llegó por un número extra sin nombre).
+  const numerosDisponibles = useMemo(() => {
+    const mapa = new Map()
+    for (const n of numerosCuenta) mapa.set(n.telefono, n.nombre)
+    for (const c of conversaciones) {
+      if (c.numero_telefono && !mapa.has(c.numero_telefono)) mapa.set(c.numero_telefono, '')
+    }
+    return [...mapa.entries()]
+      .map(([telefono, nombre]) => ({ telefono, nombre }))
+      .sort((a, b) => a.telefono.localeCompare(b.telefono))
+  }, [numerosCuenta, conversaciones])
 
   // Modal de edición de lead
   const [leadModalOpen, setLeadModalOpen] = useState(false)
@@ -51,6 +76,40 @@ export default function ConversacionesPanel({ usuarioId }) {
   useEffect(() => {
     cargarConversaciones()
   }, [cargarConversaciones])
+
+  // Polling: refresca lista y conversación activa cada 4s (sin spinners).
+  // Los entrantes los escribe el VPS en la BD; sin esto solo se ven al
+  // recargar. Se pausa con la pestaña oculta y no pisa el optimistic
+  // update de un envío en curso (mensajes temp-).
+  const activaId = conversacionActiva?.id
+  useEffect(() => {
+    const tick = async () => {
+      if (document.hidden) return
+      cargarConversaciones()
+      if (!activaId) return
+      try {
+        const { res, data } = await apiFetch(`/api/conversaciones/${activaId}/`)
+        if (!res.ok) return
+        setConversacionActiva((prev) => {
+          if (!prev || prev.id !== activaId) return prev
+          const hayTemp = prev.mensajes?.some((m) => String(m.id).startsWith('temp-'))
+          return hayTemp ? prev : data
+        })
+        // Llegaron mensajes nuevos con el chat abierto: marcarlos leídos
+        // (palomitas azules) igual que al abrir la conversación.
+        if (data.no_leidos > 0) {
+          apiFetch(`/api/conversaciones/${activaId}/read/`, { method: 'POST' })
+          setConversaciones((prev) =>
+            prev.map((c) => (c.id === activaId ? { ...c, no_leidos: 0 } : c))
+          )
+        }
+      } catch {
+        // Silencioso: el siguiente tick reintenta.
+      }
+    }
+    const intervalo = setInterval(tick, 4000)
+    return () => clearInterval(intervalo)
+  }, [activaId, cargarConversaciones])
 
   // Seleccionar conversación
   const seleccionar = async (id) => {
@@ -175,6 +234,19 @@ export default function ConversacionesPanel({ usuarioId }) {
     apiFetch(`/api/conversaciones/${conversacionActiva.id}/typing/`, { method: 'POST' }).catch(() => {})
   }
 
+  // Sin número conectado: pedir conectarlo antes de mostrar la bandeja.
+  if (sinNumero) {
+    return (
+      <div className="flex h-full items-center justify-center px-6">
+        <div className="flex flex-col items-center text-center max-w-sm">
+          <Icon name="inventory_2" className="text-outline-variant text-[44px] mb-3" />
+          <h3 className="font-display text-[15px] font-semibold mb-1">{tc.sinNumeroTitulo}</h3>
+          <p className="text-[13px] text-on-surface-variant leading-relaxed">{tc.sinNumeroTexto}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full">
       {/* Contenedor de filtros (asignación) */}
@@ -183,6 +255,9 @@ export default function ConversacionesPanel({ usuarioId }) {
           filtroActivo={filtroAsignacion}
           onCambiar={setFiltroAsignacion}
           noLeidosPorGrupo={noLeidosPorGrupo}
+          numeros={numerosDisponibles}
+          filtroNumero={filtroNumero}
+          onCambiarNumero={setFiltroNumero}
         />
       </div>
 
@@ -197,6 +272,7 @@ export default function ConversacionesPanel({ usuarioId }) {
           filtroAsignacion={filtroAsignacion}
           filtroLectura={filtroLectura}
           onCambiarLectura={setFiltroLectura}
+          filtroNumero={filtroNumero}
           busqueda={busqueda}
           onBuscar={setBusqueda}
         />
@@ -205,7 +281,7 @@ export default function ConversacionesPanel({ usuarioId }) {
       {/* Panel derecho - Chat */}
       {/* min-w-0 permite que el chat se encoja cuando el panel de
           notificaciones está abierto (el layout se auto-ajusta) */}
-      <div className="flex-1 min-w-0 bg-surface-container overflow-hidden">
+      <div className="flex-1 min-w-0 bg-[#d8d8de] dark:bg-surface-container overflow-hidden">
         <VistaConversacion
           conversacion={conversacionActiva}
           onEnviar={enviarMensaje}
@@ -214,7 +290,8 @@ export default function ConversacionesPanel({ usuarioId }) {
           onEnviarPlantilla={enviarPlantilla}
           onTyping={notificarTyping}
           cargando={cargandoDetalle}
-          onEditarLead={() => conversacionActiva?.prospecto && setLeadModalOpen(true)}
+          leadPanelAbierto={leadModalOpen}
+          onEditarLead={() => conversacionActiva?.prospecto && setLeadModalOpen((v) => !v)}
         />
       </div>
 

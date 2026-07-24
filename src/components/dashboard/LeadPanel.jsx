@@ -35,11 +35,11 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
   useEffect(() => {
     if (!prospectoId) return
     setCargando(true)
-    apiFetch(`/api/clientes/prospectos/${prospectoId}/`)
+    apiFetch(`/api/contactos/${prospectoId}/`)
       .then(({ res, data }) => {
         if (res.ok) {
           // El apodo arranca con el nombre que la persona puso en WhatsApp
-          if (!data.titulo && data.nombre) data.titulo = data.nombre
+          if (!data.apodo && data.nombre) data.apodo = data.nombre
           setForm(data)
         } else setError(tl.errCargar)
       })
@@ -59,10 +59,10 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
     setGuardando(true)
     setError('')
     try {
-      const { res, data } = await apiFetch(`/api/clientes/prospectos/${prospectoId}/`, {
+      const { res, data } = await apiFetch(`/api/contactos/${prospectoId}/`, {
         method: 'PATCH',
         body: JSON.stringify({
-          titulo: form.titulo || '',
+          apodo: form.apodo || '',
           nombres: form.nombres || '',
           apellido_paterno: form.apellido_paterno || '',
           apellido_materno: form.apellido_materno || '',
@@ -71,7 +71,6 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
           correo: form.correo || '',
           fecha_nacimiento: form.fecha_nacimiento || null,
           notas: form.notas || '',
-          estado: form.estado || 'nuevo',
         }),
       })
       if (res.ok) onSaved?.(data)
@@ -85,14 +84,17 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
 
   return (
     <div className="w-[300px] shrink-0 bg-surface-container-lowest border-l border-outline-variant flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 h-11 shrink-0">
+      {/* Header — guardar en el lugar donde estaba la x */}
+      <div className="flex items-center justify-between gap-2 px-4 h-11 shrink-0">
         <h2 className="font-display font-bold text-[15px] truncate min-w-0">
-          {form?.codigo_lead ? tl.tituloLead(form.codigo_lead) : tl.editarLead}
+          {form?.codigo_contacto ? tl.tituloLead(form.codigo_contacto) : tl.editarLead}
         </h2>
-        <button onClick={onClose} className="p-1 text-on-surface-variant hover:text-on-surface transition-colors">
-          <Icon name="close" className="text-[18px] leading-none" />
-        </button>
+        {tab === 'datos' && !cargando && (
+          <button onClick={guardar} disabled={guardando} title={tl.guardar}
+            className="shrink-0 p-1 text-on-surface-variant hover:text-primary transition-colors disabled:opacity-50">
+            <Icon name={guardando ? 'hourglass_empty' : 'save'} className={`text-[18px] leading-none ${guardando ? 'animate-pulse' : ''}`} />
+          </button>
+        )}
       </div>
 
       {/* Info de solo lectura (viene de WhatsApp, no editable) */}
@@ -104,7 +106,7 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
           </div>
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[10px] tracking-wide uppercase text-outline-variant font-display font-semibold shrink-0">{tl.nombreWhatsapp}</span>
-            <span className="text-[12px] text-on-surface-variant font-body truncate text-right">{form.titulo || '—'}</span>
+            <span className="text-[12px] text-on-surface-variant font-body truncate text-right">{form.apodo || '—'}</span>
           </div>
         </div>
       )}
@@ -184,24 +186,6 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
         )}
       </div>
 
-      {/* Footer */}
-      {tab === 'datos' && !cargando && (
-        <>
-          <div className="h-px bg-outline-variant" />
-          <div className="flex items-center justify-end gap-2 px-4 py-2.5 shrink-0">
-            <button onClick={onClose} className="px-3 py-1.5 text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors">
-              {tl.cancelar}
-            </button>
-            <button
-              onClick={guardar}
-              disabled={guardando}
-              className="px-4 py-1.5 bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50"
-            >
-              {guardando ? tl.guardando : tl.guardar}
-            </button>
-          </div>
-        </>
-      )}
     </div>
   )
 }
