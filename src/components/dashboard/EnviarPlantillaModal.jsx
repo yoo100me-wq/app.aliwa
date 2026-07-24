@@ -88,11 +88,17 @@ export default function EnviarPlantillaModal({ masivo = false, plantillaInicial 
   const enviar = async () => {
     setEnviando(true)
     setError('')
+    // Botones de la plantilla (QUICK_REPLY/URL/PHONE): se mandan para que la
+    // burbuja del emisor también los muestre (el destinatario ya los ve).
+    const botonesRender = ((sel.components || []).find((c) => c.type === 'BUTTONS')?.buttons || [])
+      .map((b) => b.text)
+      .filter(Boolean)
     const payload = {
       nombre: sel.name,
       idioma: sel.language,
       variables: vars.map((v) => valores[v]),
       contenido_render: contenidoRender,
+      botones_render: botonesRender,
     }
     if (masivo) payload.cliente_ids = idsMarcados
     const r = await onEnviar(payload)

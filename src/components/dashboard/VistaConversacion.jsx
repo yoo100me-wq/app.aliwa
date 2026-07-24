@@ -9,6 +9,19 @@ function formatearHoraMensaje(iso, locale) {
   return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
 }
 
+// Separa el marcador de botones que el backend anexa al contenido de las
+// plantillas ("\n[[botones]]a | b") para pintarlos como pills en la burbuja.
+function separarBotones(contenido) {
+  const idx = (contenido || '').lastIndexOf('\n[[botones]]')
+  if (idx === -1) return { texto: contenido, botones: [] }
+  const botones = contenido
+    .slice(idx + '\n[[botones]]'.length)
+    .split('|')
+    .map((b) => b.trim())
+    .filter(Boolean)
+  return { texto: contenido.slice(0, idx), botones }
+}
+
 function EstadoMensaje({ estado }) {
   if (!estado || estado === 'enviado') {
     return <Icon name="check" className="text-[12px] opacity-50" />
@@ -341,9 +354,28 @@ export default function VistaConversacion({
                   <span className="text-[13px] underline">{tc.abrirDocumento}</span>
                 </a>
               )}
-              {msg.contenido ? (
-                <p className="text-[13px] leading-[1.6] whitespace-pre-wrap">{msg.contenido}</p>
-              ) : !msg.url_media ? (
+              {msg.contenido ? (() => {
+                const { texto, botones } = separarBotones(msg.contenido)
+                return (
+                  <>
+                    {texto && (
+                      <p className="text-[13px] leading-[1.6] whitespace-pre-wrap">{texto}</p>
+                    )}
+                    {botones.length > 0 && (
+                      <div className="mt-2 pt-1.5 border-t border-white/20 space-y-1">
+                        {botones.map((b) => (
+                          <div
+                            key={b}
+                            className="text-center text-[13px] font-display font-semibold py-1.5 rounded-lg bg-white/15"
+                          >
+                            {b}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })() : !msg.url_media ? (
                 <p className="text-[13px] leading-[1.6] italic opacity-70">[{tc.tipoMensaje[msg.tipo_mensaje] || msg.tipo_mensaje}]</p>
               ) : null}
               <div className={`flex items-center gap-1 mt-1 ${
