@@ -1,8 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { apiFetch } from '../../utils/api'
+import { LADAS, telefonoConLada } from '../../utils/ladas'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
 import { colorAvatar } from './avatarColor'
+import { iniciales } from '../../utils/iniciales'
+import LeadPanel from './LeadPanel'
+import useErrorToast from '../../hooks/useErrorToast'
 
 // Clasificación DERIVADA del contacto (labels en t.contactos.clasif):
 // cliente = tiene ciclo de vida; lead = oportunidades abiertas; contacto = resto.
@@ -28,75 +32,39 @@ function nombrePersona(p) {
   return p.nombre || `Lead ${p.codigo_contacto}`
 }
 
-const campo =
-  'w-full bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
+// Sin ancho, para componer en filas flex (la lada junto al número). Agregarle
+// `w-auto` a `campo` NO sirve: Tailwind emite .w-full después de .w-auto, así
+// que el 100% gana y el campo de al lado se queda sin espacio.
+const campoSinAncho =
+  'bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
+const campo = `w-full ${campoSinAncho}`
 const label = 'block text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1'
 
-// Mapa de ladas por país. `prefijo` es lo que se antepone al número local
-// para formar el formato de WhatsApp (México lleva el 1 extra: 521...).
-const LADAS = [
-  { codigo: 'MX', nombre: 'México', bandera: '🇲🇽', lada: '+52', prefijo: '521' },
-  { codigo: 'US', nombre: 'Estados Unidos', bandera: '🇺🇸', lada: '+1', prefijo: '1' },
-  { codigo: 'GT', nombre: 'Guatemala', bandera: '🇬🇹', lada: '+502', prefijo: '502' },
-  { codigo: 'CO', nombre: 'Colombia', bandera: '🇨🇴', lada: '+57', prefijo: '57' },
-  { codigo: 'AR', nombre: 'Argentina', bandera: '🇦🇷', lada: '+54', prefijo: '54' },
-  { codigo: 'PE', nombre: 'Perú', bandera: '🇵🇪', lada: '+51', prefijo: '51' },
-  { codigo: 'CL', nombre: 'Chile', bandera: '🇨🇱', lada: '+56', prefijo: '56' },
-  { codigo: 'ES', nombre: 'España', bandera: '🇪🇸', lada: '+34', prefijo: '34' },
-]
-
-// Devuelve el teléfono en formato WhatsApp (prefijo+local). Si el usuario ya
-// escribió el número con lada (con o sin +), se respeta tal cual.
-function telefonoConLada(entrada, pais) {
-  const digitos = entrada.replace(/\D/g, '')
-  if (!digitos) return ''
-  const ladaDigitos = pais.lada.replace('+', '')
-  // Solo cuenta como "ya trae lada" si es MÁS largo que un número local
-  // (10 díg.): un local que empiece en 52 no debe confundirse con la lada.
-  if (digitos.length > 10 && (digitos.startsWith(pais.prefijo) || digitos.startsWith(ladaDigitos))) {
-    return digitos
-  }
-  return pais.prefijo + digitos
-}
-
-// Modal de alta manual: persona (nombres+apellidos) o empresa (nombre+giro)
-function ModalAgregar({ tipo, onGuardar, onClose }) {
+// Modal de alta de EMPRESA. El nombre y el giro no llegan de ningún lado, así
+// que hay que pedirlos. Las personas se dan de alta en el panel lateral
+// (LeadPanel en modo `nuevo`): ahí basta el teléfono.
+function ModalAgregar({ onGuardar, onClose }) {
   const { t } = useLang()
   const tc = t.contactos
-  const esPersona = tipo === 'personas'
-  const [form, setForm] = useState({
-    nombres: '', apellido_paterno: '', apellido_materno: '',
-    nombre: '', industria: '', telefono: '', correo: '',
-  })
+  const [form, setForm] = useState({ nombre: '', industria: '', telefono: '', correo: '' })
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(error, setError)
   const [pais, setPais] = useState(LADAS[0])  // default México
   const set = (c, v) => setForm((f) => ({ ...f, [c]: v }))
 
   const guardar = async () => {
     setError('')
-    const nombre = esPersona
-      ? [form.nombres, form.apellido_paterno, form.apellido_materno].filter(Boolean).join(' ').trim()
-      : form.nombre.trim()
-    if (!nombre) {
+    if (!form.nombre.trim()) {
       setError(tc.errNombreRequerido)
       return
     }
     setGuardando(true)
-    const telefono = telefonoConLada(form.telefono, pais)
-    const payload = esPersona
-      ? {
-          nombre, nombres: form.nombres.trim(),
-          apellido_paterno: form.apellido_paterno.trim(),
-          apellido_materno: form.apellido_materno.trim(),
-          telefono, correo: form.correo.trim(),
-          origen: 'manual',
-        }
-      : {
-          nombre, industria: form.industria.trim(),
-          telefono, correo: form.correo.trim(),
-        }
-    const ok = await onGuardar(payload, setError)
+    const ok = await onGuardar({
+      nombre: form.nombre.trim(), industria: form.industria.trim(),
+      telefono: telefonoConLada(form.telefono, pais), correo: form.correo.trim(),
+    }, setError)
     setGuardando(false)
     if (ok) onClose()
   }
@@ -104,50 +72,24 @@ function ModalAgregar({ tipo, onGuardar, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-neutral/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="border border-outline-variant bg-surface-container rounded-2xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <h3 className="font-display font-bold text-[15px] mb-4">
-          {esPersona ? tc.nuevoContacto : tc.nuevaEmpresa}
-        </h3>
+        <h3 className="font-display font-bold text-[15px] mb-4">{tc.nuevaEmpresa}</h3>
         <div className="space-y-3">
-          {esPersona ? (
-            <>
-              <div>
-                <label className={label}>{tc.lblNombres}</label>
-                <input className={campo} value={form.nombres} placeholder={tc.phNombres}
-                  onChange={(e) => set('nombres', e.target.value)} autoFocus />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={label}>{tc.lblApellidoPaterno}</label>
-                  <input className={campo} value={form.apellido_paterno} placeholder={tc.phApellidoPaterno}
-                    onChange={(e) => set('apellido_paterno', e.target.value)} />
-                </div>
-                <div>
-                  <label className={label}>{tc.lblApellidoMaterno}</label>
-                  <input className={campo} value={form.apellido_materno} placeholder={tc.phApellidoMaterno}
-                    onChange={(e) => set('apellido_materno', e.target.value)} />
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label className={label}>{tc.lblNombreEmpresa}</label>
-                <input className={campo} value={form.nombre} placeholder={tc.phNombreEmpresa}
-                  onChange={(e) => set('nombre', e.target.value)} autoFocus />
-              </div>
-              <div>
-                <label className={label}>{tc.lblIndustria}</label>
-                <input className={campo} value={form.industria} placeholder={tc.phIndustria}
-                  onChange={(e) => set('industria', e.target.value)} />
-              </div>
-            </>
-          )}
+          <div>
+            <label className={label}>{tc.lblNombreEmpresa}</label>
+            <input className={campo} value={form.nombre} placeholder={tc.phNombreEmpresa}
+              onChange={(e) => set('nombre', e.target.value)} autoFocus />
+          </div>
+          <div>
+            <label className={label}>{tc.lblIndustria}</label>
+            <input className={campo} value={form.industria} placeholder={tc.phIndustria}
+              onChange={(e) => set('industria', e.target.value)} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={label}>{tc.lblTelefono}</label>
               <div className="flex gap-1.5">
                 <select
-                  className={`${campo} w-auto shrink-0 pr-1`}
+                  className={`${campoSinAncho} shrink-0 w-[84px] pr-1`}
                   value={pais.codigo}
                   onChange={(e) => setPais(LADAS.find((l) => l.codigo === e.target.value) || LADAS[0])}
                   title={pais.nombre}
@@ -156,7 +98,8 @@ function ModalAgregar({ tipo, onGuardar, onClose }) {
                     <option key={l.codigo} value={l.codigo}>{l.bandera} {l.lada}</option>
                   ))}
                 </select>
-                <input className={campo} value={form.telefono} placeholder={tc.phTelefono}
+                <input className={`${campoSinAncho} flex-1 min-w-0`} value={form.telefono}
+                  placeholder={tc.phTelefono} inputMode="tel"
                   onChange={(e) => set('telefono', e.target.value)} />
               </div>
             </div>
@@ -166,7 +109,6 @@ function ModalAgregar({ tipo, onGuardar, onClose }) {
                 onChange={(e) => set('correo', e.target.value)} />
             </div>
           </div>
-          {error && <p className="text-[12px] text-error font-display">{error}</p>}
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose}
@@ -174,7 +116,7 @@ function ModalAgregar({ tipo, onGuardar, onClose }) {
             {tc.cancelar}
           </button>
           <button onClick={guardar} disabled={guardando}
-            className="px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-40">
+            className="px-4 py-2 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-40">
             {guardando ? tc.guardando : tc.guardar}
           </button>
         </div>
@@ -191,20 +133,25 @@ export default function ContactosSection() {
   const [empresas, setEmpresas] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(error, setError)
+  // Falla al cargar la lista: además del toast deja el aviso en el área vacía
+  const [fallaCarga, setFallaCarga] = useState(false)
   const [busqueda, setBusqueda] = useState('')
-  const [agregando, setAgregando] = useState(false)
+  const [agregando, setAgregando] = useState(false)      // modal de empresa
+  const [creandoPersona, setCreandoPersona] = useState(false)  // panel lateral
+  // Contacto abierto en el LeadPanel (el mismo panel de edición de chats)
+  const [editandoId, setEditandoId] = useState(null)
 
-  // POST al endpoint según el tab activo; agrega el registro a la lista.
+  // Alta de empresa (las personas se crean desde el LeadPanel).
   const guardarNuevo = async (payload, setModalError) => {
-    const url = tab === 'personas' ? '/api/contactos/' : '/api/contactos/empresas/'
     try {
-      const { res, data } = await apiFetch(url, {
+      const { res, data } = await apiFetch('/api/contactos/empresas/', {
         method: 'POST',
         body: JSON.stringify(payload),
       })
       if (res.ok) {
-        if (tab === 'personas') setPersonas((prev) => [data, ...prev])
-        else setEmpresas((prev) => [data, ...prev])
+        setEmpresas((prev) => [data, ...prev])
         return true
       }
       // data.error (duplicado) o errores de campo del serializer
@@ -228,9 +175,9 @@ export default function ContactosSection() {
         if (!vivo) return
         if (p.res.ok) setPersonas(Array.isArray(p.data) ? p.data : p.data?.results || [])
         if (e.res.ok) setEmpresas(Array.isArray(e.data) ? e.data : e.data?.results || [])
-        if (!p.res.ok && !e.res.ok) setError(tc.errCargar)
+        if (!p.res.ok && !e.res.ok) { setError(tc.errCargar); setFallaCarga(true) }
       })
-      .catch(() => vivo && setError(tc.errCargar))
+      .catch(() => { if (vivo) { setError(tc.errCargar); setFallaCarga(true) } })
       .finally(() => vivo && setCargando(false))
     return () => { vivo = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -270,7 +217,8 @@ export default function ContactosSection() {
   const celdaHead = 'text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase text-left px-3 py-2'
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-w-0">
+      <div className="flex-1 flex flex-col min-w-0">
       {/* Header: título + tabs + buscador */}
       <div className="flex items-center gap-4 px-4 h-11 shrink-0">
         <h3 className="font-display font-bold text-[15px]">{tc.titulo}</h3>
@@ -279,7 +227,7 @@ export default function ContactosSection() {
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`px-3 py-1 rounded-lg text-[13px] font-display font-semibold transition-all ${
+              className={`px-3 py-1 text-[13px] font-display font-semibold transition-all ${
                 tab === id
                   ? 'bg-primary text-on-primary'
                   : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
@@ -291,13 +239,6 @@ export default function ContactosSection() {
           ))}
         </div>
         <div className="flex-1" />
-        <button
-          onClick={() => setAgregando(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 shrink-0"
-        >
-          <Icon name="add" className="text-[16px] leading-none" />
-          {tab === 'personas' ? tc.agregarContacto : tc.agregarEmpresa}
-        </button>
         <div className="relative w-64">
           <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-outline-variant leading-none" />
           <input
@@ -307,6 +248,21 @@ export default function ContactosSection() {
             onChange={(e) => setBusqueda(e.target.value)}
           />
         </div>
+        <button
+          onClick={() => {
+            // Persona → panel lateral en modo alta. Empresa → modal.
+            if (tab === 'personas') {
+              setEditandoId(null)
+              setCreandoPersona(true)
+            } else {
+              setAgregando(true)
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 shrink-0"
+        >
+          <Icon name="add" className="text-[16px] leading-none" />
+          {tab === 'personas' ? tc.agregarContacto : tc.agregarEmpresa}
+        </button>
       </div>
       <div className="h-px bg-outline-variant" />
 
@@ -314,8 +270,8 @@ export default function ContactosSection() {
       <div className="flex-1 overflow-y-auto">
         {cargando ? (
           <p className="text-[13px] text-on-surface-variant py-10 text-center">{tc.cargando}</p>
-        ) : error ? (
-          <p className="text-[13px] text-error py-10 text-center">{error}</p>
+        ) : fallaCarga ? (
+          <p className="text-[13px] text-error py-10 text-center">{tc.errCargar}</p>
         ) : lista.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-16 px-6">
             <Icon name={tab === 'personas' ? 'person_search' : 'domain'} className="text-outline-variant text-[44px] mb-3" />
@@ -339,14 +295,25 @@ export default function ContactosSection() {
                 const nombre = nombrePersona(p)
                 const clasif = clasificacionDe(p)
                 return (
-                  <tr key={p.id} className="border-b border-outline-variant/20 hover:bg-surface-container-high/30 transition-colors">
+                  <tr
+                    key={p.id}
+                    // La fila completa abre el panel del contacto (antes había
+                    // un lápiz que solo asomaba al pasar el mouse).
+                    onClick={() => {
+                      setCreandoPersona(false)
+                      setEditandoId((id) => (id === p.id ? null : p.id))
+                    }}
+                    className={`border-b border-outline-variant/20 transition-colors cursor-pointer ${
+                      editandoId === p.id ? 'bg-primary/5' : 'hover:bg-surface-container-high/30'
+                    }`}
+                  >
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className={`w-8 h-8 rounded-full ${colorAvatar(p.telefono || p.id)} flex items-center justify-center shrink-0`}>
                           {nombre.startsWith('Lead ') ? (
                             <Icon name="person" className="text-[16px] leading-none" />
                           ) : (
-                            <span className="font-display font-semibold text-[12px]">{nombre[0].toUpperCase()}</span>
+                            <span className="font-display font-semibold text-[12px]">{iniciales(p.nombres || nombre, p.apellido_paterno)}</span>
                           )}
                         </div>
                         <div className="min-w-0">
@@ -422,9 +389,29 @@ export default function ContactosSection() {
         )}
       </div>
 
-      {/* Modal de alta manual (persona o empresa según el tab) */}
-      {agregando && (
-        <ModalAgregar tipo={tab} onGuardar={guardarNuevo} onClose={() => setAgregando(false)} />
+      {/* El alta de EMPRESA sí necesita modal: nombre y giro no vienen de
+          ningún lado. La de PERSONA se hace en el panel lateral (abajo). */}
+      {agregando && tab === 'empresas' && (
+        <ModalAgregar onGuardar={guardarNuevo} onClose={() => setAgregando(false)} />
+      )}
+      </div>
+
+      {/* Panel lateral: alta de persona y edición usan el MISMO componente */}
+      {(editandoId || creandoPersona) && (
+        <LeadPanel
+          key={editandoId || 'nuevo'}
+          prospectoId={editandoId}
+          nuevo={!editandoId}
+          conCerrar
+          onClose={() => { setEditandoId(null); setCreandoPersona(false) }}
+          onSaved={(data) =>
+            setPersonas((prev) =>
+              prev.some((p) => p.id === data.id)
+                ? prev.map((p) => (p.id === data.id ? { ...p, ...data } : p))
+                : [data, ...prev]
+            )
+          }
+        />
       )}
     </div>
   )

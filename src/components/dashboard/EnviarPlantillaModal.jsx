@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { apiFetch } from '../../utils/api'
 import Icon from '../shared/Icon'
+import PanelLateral from './PanelLateral'
+import PreviaPlantilla from './PreviaPlantilla'
+import { previaDeComponents } from '../../utils/plantillaComponents'
 import { useLang } from '../../i18n-app'
+import useErrorToast from '../../hooks/useErrorToast'
 
 const campo =
   'w-full bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
@@ -19,11 +23,18 @@ function renderCuerpo(texto, valores) {
 }
 
 /**
- * Modal para enviar una plantilla aprobada.
+ * Envío de una plantilla aprobada.
  * - masivo=false: envío individual (el padre manda a la conversación activa).
  * - masivo=true: selector de clientes destinatarios (hasta 100).
+ * - presentacion: 'modal' centrado | 'panel' lateral de 300px (desde el chat,
+ *   no tapa la conversación) | 'inline' sin marco, lo coloca el padre.
+ * - plantillaFija: la plantilla ya viene elegida desde fuera, así que se
+ *   ocultan el selector y la vista previa (el padre ya los muestra).
  */
-export default function EnviarPlantillaModal({ masivo = false, plantillaInicial = null, onEnviar, onClose }) {
+export default function EnviarPlantillaModal({
+  masivo = false, plantillaInicial = null, onEnviar, onClose,
+  presentacion = 'modal', plantillaFija = false,
+}) {
   const { t } = useLang()
   const tp = t.plantillas
   const te = tp.envio
@@ -38,6 +49,8 @@ export default function EnviarPlantillaModal({ masivo = false, plantillaInicial 
   const [marcados, setMarcados] = useState({})
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(error, setError)
 
   useEffect(() => {
     apiFetch('/api/whatsapp/plantillas/')
@@ -82,6 +95,11 @@ export default function EnviarPlantillaModal({ masivo = false, plantillaInicial 
   })
   const idsMarcados = Object.keys(marcados).filter((k) => marcados[k])
 
+  // Alfabético: en un desplegable el orden en que Meta las devuelve no ayuda.
+  const plantillasOrdenadas = [...plantillas].sort(
+    (a, b) => a.name.localeCompare(b.name) || a.language.localeCompare(b.language)
+  )
+
   const valido = sel && vars.every((v) => (valores[v] || '').trim()) &&
     (!masivo || idsMarcados.length > 0)
 
@@ -110,60 +128,63 @@ export default function EnviarPlantillaModal({ masivo = false, plantillaInicial 
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-neutral/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        className="border border-outline-variant bg-surface-container rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-bold text-[15px]">{masivo ? te.tituloMasivo : te.titulo}</h3>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface p-1">
-            <Icon name="close" className="text-[18px] leading-none" />
-          </button>
-        </div>
+  const titulo = masivo ? te.tituloMasivo : te.titulo
 
+  const contenido = (
+    <>
         {cargando ? (
           <p className="text-[13px] text-on-surface-variant py-4 text-center">{tp.cargando}</p>
         ) : plantillas.length === 0 ? (
           <p className="text-[13px] text-on-surface-variant py-4">{te.sinAprobadas}</p>
         ) : (
           <div className="space-y-3">
-            {/* Selección de plantilla */}
-            <div>
-              <label className={label}>{te.seleccionaPlantilla}</label>
-              <div className="flex flex-wrap gap-2">
-                {plantillas.map((p) => (
-                  <button
-                    key={p.id || p.name}
-                    onClick={() => { setSel(p); setValores({}) }}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-display font-semibold transition-colors ${
-                      sel?.name === p.name && sel?.language === p.language
-                        ? 'bg-primary text-on-primary'
-                        : 'bg-surface-container-lowest dark:bg-surface-container-high/50 text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    {p.name}
-                  </button>
+            {/* Selección de plantilla. Un desplegable en vez de una nube de
+                chips: los nombres de plantilla son largos (aliwa_verificacion)
+                y con varias aprobadas la nube crecía sin control, sobre todo en
+                el panel de 300px. Además ordena y muestra el idioma. */}
+            <div className={plantillaFija ? 'hidden' : ''}>
+              <label className={label} htmlFor="plantilla-sel">{te.seleccionaPlantilla}</label>
+              <select
+                id="plantilla-sel"
+                className={campo}
+                value={sel ? `${sel.name}|${sel.language}` : ''}
+                onChange={(e) => {
+                  const [nombre, idioma] = e.target.value.split('|')
+                  setSel(plantillas.find((p) => p.name === nombre && p.language === idioma) || null)
+                  setValores({})
+                }}
+              >
+                <option value="">{te.seleccionaPlantilla}</option>
+                {plantillasOrdenadas.map((p) => (
+                  <option key={`${p.name}|${p.language}`} value={`${p.name}|${p.language}`}>
+                    {p.name} · {p.language}
+                  </option>
                 ))}
-              </div>
+              </select>
             </div>
 
             {/* Vista previa + variables */}
             {sel && (
               <>
-                <div className="bg-purple/8 rounded-xl p-3">
-                  <div className="bg-surface-container-lowest dark:bg-surface-container-high rounded-xl rounded-tl-none px-3 py-2">
-                    <p className="text-[13px] font-body whitespace-pre-wrap leading-relaxed break-words">
-                      {contenidoRender}
-                    </p>
-                  </div>
-                </div>
+                {/* Previa sobre el lienzo del chat y con la burbuja PROPIA
+                    (verde): la plantilla es un mensaje que enviamos nosotros,
+                    así que se ve tal cual quedará en la conversación. */}
+                {/* Plantilla COMPLETA (encabezado, cuerpo, pie y botones), no
+                    solo el cuerpo. Alto fijo con scroll para que una plantilla
+                    larga no empuje los campos de variables fuera de la vista.
+                    Si la plantilla viene fija, el padre ya la está mostrando. */}
+                {!plantillaFija && <PreviaPlantilla
+                  {...previaDeComponents(sel.components, tp.copiarCodigo)}
+                  cuerpo={contenidoRender}
+                  alto="h-40"
+                />}
 
                 {vars.length > 0 && (
                   <div>
                     <label className={label}>{te.variablesLabel}</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* En el panel (300px) dos columnas dejan campos de ~130px:
+                        ahí van apilados. En el modal caben las dos. */}
+                    <div className={`grid gap-2 ${presentacion === 'panel' ? 'grid-cols-1' : 'grid-cols-2'}`}>
                       {vars.map((v) => (
                         <input
                           key={v}
@@ -228,18 +249,43 @@ export default function EnviarPlantillaModal({ masivo = false, plantillaInicial 
               </div>
             )}
 
-            {error && <p className="text-[12px] text-error">{error}</p>}
 
             <button
               onClick={enviar}
               disabled={!valido || enviando}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-40"
+              className="flex items-center gap-1.5 px-4 py-2 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-40"
             >
               <Icon name="send" className="text-[15px] leading-none" />
               {enviando ? te.enviando : masivo ? te.enviarA(idsMarcados.length) : te.enviar}
             </button>
           </div>
         )}
+    </>
+  )
+
+  if (presentacion === 'inline') return contenido
+
+  if (presentacion === 'panel') {
+    return (
+      <PanelLateral titulo={titulo} onClose={onClose} flotante>
+        {contenido}
+      </PanelLateral>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-neutral/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="border border-outline-variant bg-surface-container rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-bold text-[15px]">{titulo}</h3>
+          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface p-1">
+            <Icon name="close" className="text-[18px] leading-none" />
+          </button>
+        </div>
+        {contenido}
       </div>
     </div>
   )

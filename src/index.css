@@ -114,6 +114,22 @@
   --color-purple-dim: #5527cc;
   --color-purple-light: #a684ff;
 
+  /* Lienzo del chat: el fondo sobre el que flotan las burbujas. En claro va un
+     punto MÁS oscuro que los paneles; en oscuro, un punto más claro que el
+     negro puro de los paneles, apenas lo justo para separarlo. Un gris medio
+     (surface-container-highest, #242426) se leía como un recuadro pegado
+     encima del panel. */
+  --color-lienzo-chat: #e5e5e6;
+
+  /* Burbujas del chat: la propia en verde y la del cliente en morado, pero en
+     TINTE claro con texto oscuro, como las de WhatsApp. El verde té y el
+     morado a saturación plena obligan a texto blanco y pesan demasiado contra
+     lo claro del panel. El morado es el tertiary-container que ya existía. */
+  --color-burbuja-propia: #e7f3d4;
+  --color-on-burbuja-propia: #2c3a1a;
+  --color-burbuja-cliente: #efeaff;
+  --color-on-burbuja-cliente: #2f2440;
+
   /* Seleccionado - bold en morado oscuro del logo */
   --color-selected: #3c2c50;
 
@@ -223,6 +239,17 @@
     --color-purple: #a684ff;
     --color-purple-dim: #6C36FF;
     --color-purple-light: #c6b2ff;
+
+    /* Casi negro: los paneles son #000000, así que el lienzo solo se levanta
+       lo mínimo. Con un gris medio parecía una caja pegada encima. */
+    --color-lienzo-chat: #0d0d0f;
+
+    /* En oscuro las burbujas van en la versión profunda de cada color: el
+       verde té y el morado claros deslumbran sobre el lienzo negro. */
+    --color-burbuja-propia: #4a6130;
+    --color-on-burbuja-propia: #e9edef;
+    --color-burbuja-cliente: #3d16a8;
+    --color-on-burbuja-cliente: #e9edef;
 
     /* En oscuro el seleccionado es neutro puro (blanco), sin tinte morado */
     --color-selected: #ffffff;

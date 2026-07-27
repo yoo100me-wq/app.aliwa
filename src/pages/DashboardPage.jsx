@@ -13,6 +13,7 @@ import SuscripcionCheckout from '../components/dashboard/SuscripcionCheckout'
 import { apiFetch, NEGOCIO_STORAGE_KEY } from '../utils/api'
 import { initFacebookSDK } from '../utils/facebook'
 import { useLang } from '../i18n-app'
+import { iniciales } from '../utils/iniciales'
 
 // Solo ids/iconos: los labels salen de t.dash.menu / t.dash.menuGrupos
 // Facturación, Pipelines, Citas, Embudo, Pago WhatsApp y Tienda se agregarán
@@ -546,7 +547,7 @@ export default function DashboardPage() {
                             className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${activo ? 'bg-primary/5' : 'hover:bg-surface-container-highest/50'}`}
                           >
                             <div className="w-7 h-7 rounded-lg bg-purple/10 flex items-center justify-center shrink-0">
-                              <span className="text-purple font-display font-bold text-[11px]">{n.nombre?.[0]?.toUpperCase() || '?'}</span>
+                              <span className="text-purple font-display font-bold text-[11px]">{iniciales(n.nombre)}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className={`text-[13px] font-display font-semibold truncate ${activo ? 'text-primary' : ''}`}>{n.nombre}</div>
@@ -809,7 +810,7 @@ export default function DashboardPage() {
                           <img src={editAvatar} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <span className="w-full h-full flex items-center justify-center font-display font-bold text-[36px] text-on-surface-variant">
-                            {(usuario?.nombre || '?').charAt(0).toUpperCase()}
+                            {iniciales(usuario?.nombre, usuario?.apellido)}
                           </span>
                         )}
                         <span className="absolute inset-0 rounded-full bg-inverse-surface/0 group-hover:bg-inverse-surface/30 transition-colors flex items-center justify-center">
@@ -823,7 +824,7 @@ export default function DashboardPage() {
                           <img src={usuario.avatar} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <span className="font-display font-bold text-[36px] text-on-surface-variant">
-                            {(usuario?.nombre || '?').charAt(0).toUpperCase()}
+                            {iniciales(usuario?.nombre, usuario?.apellido)}
                           </span>
                         )}
                       </div>
@@ -874,7 +875,7 @@ export default function DashboardPage() {
                               placeholder="000000" maxLength={6}
                               className="w-28 bg-surface-container-high/50 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface text-center tracking-[0.3em] outline-none" />
                             <button type="button" onClick={confirmarCambioCorreo} disabled={emailCodigo.length !== 6}
-                              className="bg-primary text-on-primary px-3 py-2 rounded-lg text-[12px] font-display font-semibold transition-all active:scale-[0.98] disabled:opacity-50">
+                              className="border border-primary text-primary px-3 py-2 text-[12px] font-display font-semibold transition-all active:scale-[0.98] disabled:opacity-50">
                               {td.cuentaForm.confirmarCorreo}
                             </button>
                             <button type="button" onClick={() => { setEmailPaso('idle'); setEditEmail(usuario?.email || '') }}
@@ -893,7 +894,7 @@ export default function DashboardPage() {
                   {cuentaEditando ? (
                     <div className="flex items-center gap-2 mt-5">
                       <button onClick={guardarCuenta} disabled={cuentaGuardando || !editNombre.trim()}
-                        className="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50">
+                        className="border border-primary text-primary px-6 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-50">
                         {cuentaGuardando ? td.cuentaForm.guardando : td.cuentaForm.guardar}
                       </button>
                       <button onClick={() => { setCuentaEditando(false); setSettingsMsg(''); abrirSettings('editar-cuenta') }}
@@ -903,7 +904,7 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     <button onClick={() => { setCuentaEditando(true); setSettingsMsg('') }}
-                      className="mt-5 bg-primary text-on-primary px-6 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5">
+                      className="mt-5 border border-primary text-primary px-6 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 flex items-center gap-1.5">
                       <Icon name="edit" className="text-[15px] leading-none" />
                       {td.cuentaForm.editar}
                     </button>
@@ -1075,7 +1076,7 @@ export default function DashboardPage() {
 
                 <div className="flex items-center gap-3 pt-1">
                   <button type="submit" disabled={setupLoading || !setupNombre || !setupGiro}
-                    className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5">
+                    className="border border-primary text-primary px-5 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-50 flex items-center gap-1.5">
                     {setupLoading ? td.setup.guardando : td.setup.guardarContinuar}
                     {!setupLoading && <Icon name="arrow_forward" className="text-[15px]" />}
                   </button>
@@ -1152,7 +1153,7 @@ export default function DashboardPage() {
                       onClick={() => handleNav({
                         'setup-invoicing': 'setup-subscription',
                       }[activeSection])}
-                      className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
+                      className="border border-primary text-primary px-5 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 flex items-center gap-1.5"
                     >
                       {td.setupPlaceholder.siguiente}
                       <Icon name="arrow_forward" className="text-[15px]" />
@@ -1160,7 +1161,7 @@ export default function DashboardPage() {
                   ) : (
                     <button
                       onClick={() => handleNav('dashboard')}
-                      className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
+                      className="border border-primary text-primary px-5 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 flex items-center gap-1.5"
                     >
                       {td.setupPlaceholder.irDashboard}
                     </button>
@@ -1218,7 +1219,7 @@ export default function DashboardPage() {
                         setEquipoListo(true)
                         handleNav('setup-payments')
                       }}
-                      className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
+                      className="border border-primary text-primary px-5 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 flex items-center gap-1.5"
                     >
                       {td.setupTeam.continuar}
                       <Icon name="arrow_forward" className="text-[15px]" />
@@ -1241,7 +1242,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 rounded-xl bg-purple/10 flex items-center justify-center shrink-0">
                         <span className="text-purple font-display font-bold text-sm">
-                          {usuario.nombre ? usuario.nombre.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase() : '?'}
+                          {iniciales(usuario.nombre, usuario.apellido)}
                         </span>
                       </div>
                       <div>
@@ -1342,7 +1343,7 @@ export default function DashboardPage() {
                         {siguiente && (
                           <button
                             onClick={() => handleNav(siguiente.nav)}
-                            className="shrink-0 bg-primary text-on-primary px-4 py-2 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
+                            className="shrink-0 border border-primary text-primary px-4 py-2 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 flex items-center gap-1.5"
                           >
                             {td.guia.siguiente}
                             <Icon name="arrow_forward" className="text-[15px]" />

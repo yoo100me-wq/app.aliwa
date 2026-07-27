@@ -4,6 +4,8 @@ import FiltrosConversaciones from './FiltrosConversaciones'
 import ListaConversaciones from './ListaConversaciones'
 import VistaConversacion from './VistaConversacion'
 import LeadPanel from './LeadPanel'
+import EnviarPlantillaModal from './EnviarPlantillaModal'
+import EnviarInteractivoPanel from './EnviarInteractivoPanel'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
 
@@ -44,8 +46,10 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
       .sort((a, b) => a.telefono.localeCompare(b.telefono))
   }, [numerosCuenta, conversaciones])
 
-  // Modal de edición de lead
-  const [leadModalOpen, setLeadModalOpen] = useState(false)
+  // Qué ocupa la columna derecha: null | 'lead' | 'plantilla' | 'interactivo'.
+  // Son excluyentes: abrir uno cierra el anterior.
+  const [panelDerecho, setPanelDerecho] = useState(null)
+  const leadModalOpen = panelDerecho === 'lead'
 
   // No leídos por grupo de asignación (para los badges del contenedor de filtros)
   const noLeidosPorGrupo = useMemo(() => {
@@ -281,7 +285,9 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
       {/* Panel derecho - Chat */}
       {/* min-w-0 permite que el chat se encoja cuando el panel de
           notificaciones está abierto (el layout se auto-ajusta) */}
-      <div className="flex-1 min-w-0 bg-[#d8d8de] dark:bg-surface-container overflow-hidden">
+      {/* Lienzo del chat: token propio, porque la escala de superficies se
+          invierte en oscuro y dejaba un gris medio más claro que los paneles. */}
+      <div className="relative flex-1 min-w-0 bg-lienzo-chat overflow-hidden">
         <VistaConversacion
           conversacion={conversacionActiva}
           onEnviar={enviarMensaje}
@@ -291,15 +297,35 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
           onTyping={notificarTyping}
           cargando={cargandoDetalle}
           leadPanelAbierto={leadModalOpen}
-          onEditarLead={() => conversacionActiva?.prospecto && setLeadModalOpen((v) => !v)}
+          onEditarLead={() => conversacionActiva?.prospecto
+            && setPanelDerecho((p) => (p === 'lead' ? null : 'lead'))}
+          panelActivo={panelDerecho}
+          onAbrirPlantilla={() => setPanelDerecho((p) => (p === 'plantilla' ? null : 'plantilla'))}
+          onAbrirInteractivo={() => setPanelDerecho((p) => (p === 'interactivo' ? null : 'interactivo'))}
         />
+
+        {/* Plantillas e interactivos FLOTAN sobre el chat: son de paso, y
+            darles su propia columna dejaba la conversación muy angosta. */}
+        {panelDerecho === 'plantilla' && conversacionActiva && (
+          <EnviarPlantillaModal
+            presentacion="panel"
+            onEnviar={enviarPlantilla}
+            onClose={() => setPanelDerecho(null)}
+          />
+        )}
+        {panelDerecho === 'interactivo' && conversacionActiva && (
+          <EnviarInteractivoPanel
+            onEnviar={enviarInteractivo}
+            onClose={() => setPanelDerecho(null)}
+          />
+        )}
       </div>
 
-      {/* Panel lateral de edición de lead (ocupa espacio, como notificaciones) */}
+      {/* El panel del lead SÍ ocupa columna (se trabaja en paralelo al chat) */}
       {leadModalOpen && conversacionActiva?.prospecto && (
         <LeadPanel
           prospectoId={conversacionActiva.prospecto}
-          onClose={() => setLeadModalOpen(false)}
+          onClose={() => setPanelDerecho(null)}
           onSaved={() => {
             cargarConversaciones()
             seleccionar(conversacionActiva.id)

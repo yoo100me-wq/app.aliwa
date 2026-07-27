@@ -1,7 +1,8 @@
 // i18n de la APP autenticada (dashboard). A diferencia de login/registro
 // (idioma por ruta /en), aquí la preferencia vive en localStorage('aliwa-lang')
 // — igual que el tema — y se hereda del idioma con el que se hizo login.
-import { createContext, useContext, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { LangContext, useLang } from './contexto'
 import * as dash from './dash'
 import * as chats from './chats'
 import * as equipo from './equipo'
@@ -18,8 +19,6 @@ function construirT(lang) {
   for (const [nombre, mod] of Object.entries(NAMESPACES)) t[nombre] = mod[lang]
   return t
 }
-
-const LangContext = createContext(null)
 
 export function LangProvider({ children }) {
   const [lang, setLang] = useState(() => {
@@ -39,6 +38,5 @@ export function LangProvider({ children }) {
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>
 }
 
-export function useLang() {
-  return useContext(LangContext)
-}
+// Se re-exporta para no tocar los ~15 archivos que ya lo importan de aquí.
+export { useLang }

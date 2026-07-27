@@ -2,13 +2,9 @@ import { useMemo } from 'react'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
 import { colorAvatar } from './avatarColor'
+import { iniciales } from '../../utils/iniciales'
 
-function obtenerIniciales(nombre) {
-  if (!nombre) return '?'
-  const partes = nombre.trim().split(' ')
-  if (partes.length >= 2) return (partes[0][0] + partes[1][0]).toUpperCase()
-  return partes[0][0].toUpperCase()
-}
+const obtenerIniciales = iniciales
 
 function formatearHora(iso, locale, etiquetaAyer) {
   if (!iso) return ''

@@ -3,6 +3,9 @@ import { apiFetch } from '../../utils/api'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
 import EnviarPlantillaModal from './EnviarPlantillaModal'
+import PreviaPlantilla from './PreviaPlantilla'
+import { previaDeComponents } from '../../utils/plantillaComponents'
+import useErrorToast from '../../hooks/useErrorToast'
 
 // Clases visuales por estado de Meta (los labels salen de t.plantillas.estados)
 const ESTADO_CLASES = {
@@ -28,9 +31,13 @@ const FORM_VACIO = {
   encabezado: '',
   cuerpo: '',
   pie: '',
-  botones: '',
+  botones: [],   // [{ tipo: 'rapida'|'enlace', texto, url }]
   expiracion_minutos: 10,
 }
+
+// Topes de Meta: 10 botones por plantilla, de los cuales máx. 2 de enlace.
+const MAX_BOTONES = 10
+const MAX_ENLACES = 2
 
 // Variables {{1}}, {{2}}… usadas en el cuerpo (para pedir ejemplos)
 function variablesDe(texto) {
@@ -47,53 +54,6 @@ function sustituirVariables(texto, ejemplos, marcador) {
   })
 }
 
-// Burbuja de mensaje estilo WhatsApp para previsualizar la plantilla
-function VistaPrevia({ encabezado, cuerpo, pie, botones }) {
-  const { t } = useLang()
-  const tp = t.plantillas
-  return (
-    <div className="bg-purple/8 rounded-xl p-3">
-      <div className="bg-surface-container-lowest dark:bg-surface-container-high rounded-xl rounded-tl-none px-3 py-2">
-        {encabezado && (
-          <p className="text-[13px] font-body font-bold mb-1">{encabezado}</p>
-        )}
-        <p className="text-[13px] font-body whitespace-pre-wrap leading-relaxed break-words">
-          {cuerpo || tp.previaCuerpoVacio}
-        </p>
-        {pie && <p className="text-[11px] text-on-surface-variant mt-1.5">{pie}</p>}
-        <p className="text-[10px] text-on-surface-variant text-right mt-1">10:30</p>
-      </div>
-      {botones?.length > 0 && (
-        <div className="mt-1 space-y-1">
-          {botones.map((b) => (
-            <div
-              key={b}
-              className="bg-surface-container-lowest dark:bg-surface-container-high rounded-xl py-2 px-2 flex items-center justify-center gap-1.5 text-[12px] font-display font-semibold text-purple"
-            >
-              <Icon name={b === tp.copiarCodigo ? 'content_copy' : 'reply'} className="text-[14px] leading-none" />
-              <span className="truncate">{b}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Arma las props de la vista previa a partir de los components de Meta
-function previaDeComponents(components, copiarLabel) {
-  const comp = (t) => (components || []).find((c) => c.type === t)
-  const botones = (comp('BUTTONS')?.buttons || []).map((b) =>
-    b.type === 'OTP' ? copiarLabel : b.text
-  )
-  return {
-    encabezado: comp('HEADER')?.format === 'TEXT' ? comp('HEADER')?.text : '',
-    cuerpo: comp('BODY')?.text || '',
-    pie: comp('FOOTER')?.text || '',
-    botones,
-  }
-}
-
 export default function PlantillasSection() {
   const { t } = useLang()
   const tp = t.plantillas
@@ -105,9 +65,10 @@ export default function PlantillasSection() {
   const [ejemplos, setEjemplos] = useState({})
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(error, setError)
   const [aviso, setAviso] = useState('')
   const [confirmando, setConfirmando] = useState('')
-  const [plantillaEnviar, setPlantillaEnviar] = useState(null)
   const [sinNumero, setSinNumero] = useState(false)
 
   const cargar = () => {
@@ -153,14 +114,27 @@ export default function PlantillasSection() {
         encabezado: '',
         cuerpo: tp.authPreviaCuerpo,
         pie: tp.authPreviaPie(Number(form.expiracion_minutos) || 10),
-        botones: [tp.copiarCodigo],
+        botones: [{ texto: tp.copiarCodigo, tipo: 'rapida' }],
       }
     : {
         encabezado: form.encabezado.trim(),
         cuerpo: form.cuerpo ? sustituirVariables(form.cuerpo, ejemplos, tp.previaEjemplo) : '',
         pie: form.pie.trim(),
-        botones: form.botones.split(',').map((b) => b.trim()).filter(Boolean).slice(0, 3),
+        botones: form.botones.filter((b) => b.texto.trim()),
       }
+
+  // -- edición de la lista de botones --
+  const enlaces = form.botones.filter((b) => b.tipo === 'enlace').length
+  const agregarBoton = (tipo) =>
+    set('botones', [...form.botones, { tipo, texto: '', url: '' }])
+  const editarBoton = (i, campo, valor) =>
+    set('botones', form.botones.map((b, j) => (j === i ? { ...b, [campo]: valor } : b)))
+  const quitarBoton = (i) => set('botones', form.botones.filter((_, j) => j !== i))
+
+  // Un botón de enlace sin destino haría que Meta rechace la plantilla.
+  const enlaceSinUrl = form.botones.some(
+    (b) => b.tipo === 'enlace' && b.texto.trim() && !b.url.trim(),
+  )
 
   const crear = async () => {
     setGuardando(true)
@@ -178,7 +152,11 @@ export default function PlantillasSection() {
         body.cuerpo = form.cuerpo
         if (form.encabezado.trim()) body.encabezado = form.encabezado
         if (form.pie.trim()) body.pie = form.pie
-        const botones = form.botones.split(',').map((b) => b.trim()).filter(Boolean)
+        const botones = form.botones
+          .filter((b) => b.texto.trim())
+          .map((b) => (b.tipo === 'enlace'
+            ? { tipo: 'enlace', texto: b.texto.trim(), url: b.url.trim() }
+            : { tipo: 'rapida', texto: b.texto.trim() }))
         if (botones.length) body.botones = botones
         if (vars.length) body.ejemplos = vars.map((v) => ejemplos[v] || '')
       }
@@ -271,7 +249,7 @@ export default function PlantillasSection() {
                   key={valor}
                   type="button"
                   onClick={() => set('categoria', valor)}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-display font-semibold transition-colors ${
+                  className={`px-3 py-1.5 text-[12px] font-display font-semibold transition-colors ${
                     form.categoria === valor
                       ? 'bg-primary text-on-primary'
                       : 'bg-surface-container-lowest dark:bg-surface-container-high/50 text-on-surface-variant hover:text-on-surface'
@@ -342,34 +320,86 @@ export default function PlantillasSection() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={label}>{tp.labelPie}</label>
-                  <input
-                    className={campo}
-                    placeholder={tp.phPie}
-                    maxLength={60}
-                    value={form.pie}
-                    onChange={(e) => set('pie', e.target.value)}
-                  />
+              <div>
+                <label className={label}>{tp.labelPie}</label>
+                <input
+                  className={campo}
+                  placeholder={tp.phPie}
+                  maxLength={60}
+                  value={form.pie}
+                  onChange={(e) => set('pie', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={label}>{tp.labelBotones}</label>
+                <div className="space-y-2">
+                  {form.botones.map((b, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <Icon
+                        name={b.tipo === 'enlace' ? 'open_in_new' : 'reply'}
+                        className="text-[16px] leading-none text-on-surface-variant mt-2.5"
+                      />
+                      <div className="flex-1 space-y-1">
+                        <input
+                          className={campo}
+                          placeholder={b.tipo === 'enlace' ? tp.phBotonEnlace : tp.phBotonRapida}
+                          maxLength={25}
+                          value={b.texto}
+                          onChange={(e) => editarBoton(i, 'texto', e.target.value)}
+                        />
+                        {b.tipo === 'enlace' && (
+                          <input
+                            className={campo}
+                            placeholder={tp.phUrl}
+                            value={b.url}
+                            onChange={(e) => editarBoton(i, 'url', e.target.value)}
+                          />
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => quitarBoton(i)}
+                        title={tp.quitarBoton}
+                        className="text-on-surface-variant hover:text-error p-1.5 mt-0.5"
+                      >
+                        <Icon name="close" className="text-[16px] leading-none" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <label className={label}>{tp.labelBotones}</label>
-                  <input
-                    className={campo}
-                    placeholder={tp.phBotones}
-                    value={form.botones}
-                    onChange={(e) => set('botones', e.target.value)}
-                  />
-                </div>
+
+                {form.botones.length < MAX_BOTONES && (
+                  <div className="flex items-center gap-3 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => agregarBoton('rapida')}
+                      className="flex items-center gap-1 text-[12px] font-display font-semibold text-primary hover:opacity-80"
+                    >
+                      <Icon name="add" className="text-[14px] leading-none" />
+                      {tp.agregarRapida}
+                    </button>
+                    {enlaces < MAX_ENLACES && (
+                      <button
+                        type="button"
+                        onClick={() => agregarBoton('enlace')}
+                        className="flex items-center gap-1 text-[12px] font-display font-semibold text-primary hover:opacity-80"
+                      >
+                        <Icon name="add_link" className="text-[14px] leading-none" />
+                        {tp.agregarEnlace}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <p className="text-[11px] text-on-surface-variant mt-1.5">{tp.ayudaBotones}</p>
               </div>
             </>
           )}
 
           <button
             onClick={crear}
-            disabled={guardando || !form.nombre || (!esAuth && !form.cuerpo.trim()) || (vars.length > 0 && vars.some((v) => !(ejemplos[v] || '').trim()))}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={guardando || !form.nombre || (!esAuth && !form.cuerpo.trim()) || enlaceSinUrl || (vars.length > 0 && vars.some((v) => !(ejemplos[v] || '').trim()))}
+            className="flex items-center gap-1.5 px-4 py-2 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Icon name="send" className="text-[15px] leading-none" />
             {guardando ? tp.enviando : tp.enviarRevision}
@@ -379,7 +409,7 @@ export default function PlantillasSection() {
         {/* Vista previa en vivo */}
         <div className="min-w-0">
           <label className={label}>{tp.vistaPrevia}</label>
-          <VistaPrevia {...previa} />
+          <PreviaPlantilla {...previa} />
           <p className="text-[11px] text-on-surface-variant mt-2 leading-relaxed">
             {tp.vistaPreviaNota}
           </p>
@@ -404,15 +434,6 @@ export default function PlantillasSection() {
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {plantillaSel.status === 'APPROVED' && (
-            <button
-              onClick={() => { setPlantillaEnviar(plantillaSel); setError(''); setAviso('') }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-[12px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90"
-            >
-              <Icon name="send" className="text-[15px] leading-none" />
-              {tp.envio.enviar}
-            </button>
-          )}
           {confirmando === plantillaSel.name ? (
             <>
               <button onClick={() => eliminar(plantillaSel.name)} className="text-[12px] font-display font-semibold text-error hover:opacity-80 px-2 py-1">{tp.eliminar}</button>
@@ -429,8 +450,28 @@ export default function PlantillasSection() {
           )}
         </div>
       </div>
-      <div className="max-w-[320px]">
-        <VistaPrevia {...previaDeComponents(plantillaSel.components, tp.copiarCodigo)} />
+      {/* Plantilla a la IZQUIERDA, destinatarios a la DERECHA: se elige a quién
+          mandarla viendo el mensaje, sin abrir un modal encima. */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="w-full lg:w-[320px] shrink-0">
+          <PreviaPlantilla {...previaDeComponents(plantillaSel.components, tp.copiarCodigo)} />
+        </div>
+
+        {plantillaSel.status === 'APPROVED' && (
+          <div className="flex-1 min-w-0">
+            <p className={label}>{tp.envio.tituloMasivo}</p>
+            <EnviarPlantillaModal
+              // key: al cambiar de plantilla se reinician variables y marcados
+              key={plantillaSel.name + plantillaSel.language}
+              presentacion="inline"
+              plantillaFija
+              masivo
+              plantillaInicial={plantillaSel}
+              onEnviar={enviarMasivo}
+              onClose={() => {}}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
@@ -445,7 +486,7 @@ export default function PlantillasSection() {
           <p className="text-[13px] text-on-surface-variant max-w-xs mb-5">{tp.vacio}</p>
           <button
             onClick={abrirNueva}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90"
+            className="flex items-center gap-1.5 px-4 py-2 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5"
           >
             <Icon name="add" className="text-[16px] leading-none" />
             {tp.nuevaPlantilla}
@@ -522,12 +563,6 @@ export default function PlantillasSection() {
                   <p className="text-[12px] text-on-surface">{aviso}</p>
                 </div>
               )}
-              {error && (
-                <div className="flex items-start gap-2 rounded-xl bg-error/10 px-3 py-2.5">
-                  <Icon name="error" className="text-error text-[16px] leading-none mt-0.5" />
-                  <p className="text-[12px] text-error">{error}</p>
-                </div>
-              )}
             </div>
           )}
 
@@ -542,15 +577,6 @@ export default function PlantillasSection() {
         </div>
       </div>
 
-      {/* Modal de envío masivo */}
-      {plantillaEnviar && (
-        <EnviarPlantillaModal
-          masivo
-          plantillaInicial={plantillaEnviar}
-          onEnviar={enviarMasivo}
-          onClose={() => setPlantillaEnviar(null)}
-        />
-      )}
     </>
   )
 }

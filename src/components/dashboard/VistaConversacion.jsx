@@ -1,26 +1,63 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
 import { colorAvatar } from './avatarColor'
-import EnviarPlantillaModal from './EnviarPlantillaModal'
+import { iniciales } from '../../utils/iniciales'
+import { separarAcciones } from '../../utils/accionesMensaje'
+import { AccionesBurbuja } from './accionesMensaje'
+import useErrorToast from '../../hooks/useErrorToast'
 
 function formatearHoraMensaje(iso, locale) {
   if (!iso) return ''
   return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
 }
 
-// Separa el marcador de botones que el backend anexa al contenido de las
-// plantillas ("\n[[botones]]a | b") para pintarlos como pills en la burbuja.
-function separarBotones(contenido) {
-  const idx = (contenido || '').lastIndexOf('\n[[botones]]')
-  if (idx === -1) return { texto: contenido, botones: [] }
-  const botones = contenido
-    .slice(idx + '\n[[botones]]'.length)
-    .split('|')
-    .map((b) => b.trim())
-    .filter(Boolean)
-  return { texto: contenido.slice(0, idx), botones }
+// Texto corto que representa a un mensaje dentro de una cita.
+function previewMensaje(msg, tc) {
+  const { texto } = separarAcciones(msg.contenido || '')
+  if (texto.trim()) return texto.trim()
+  return `[${tc.tipoMensaje[msg.tipo_mensaje] || msg.tipo_mensaje}]`
 }
+
+// Cita del mensaje al que se responde (Meta lo manda en context.id y el
+// backend lo guarda en wa_contexto_id). `citado` viene undefined cuando el
+// original quedó fuera de la página de mensajes cargada.
+function MensajeCitado({ citado, nombreCliente, esReaccion, tc }) {
+  const autor = esReaccion
+    ? tc.citaReaccion
+    : !citado
+    ? ''
+    : citado.tipo_remitente === 'cliente'
+    ? nombreCliente
+    : tc.citaTu
+
+  return (
+    <div className={`mb-1.5 py-1 pl-2 pr-2 rounded border-l-[3px] ${TINTE_BORDE} ${TINTE_FONDO}`}>
+      {autor && (
+        <p className="text-[11px] font-display font-semibold leading-tight opacity-90">{autor}</p>
+      )}
+      <p className="text-[12px] leading-snug opacity-75 line-clamp-2">
+        {citado ? previewMensaje(citado, tc) : tc.citaNoDisponible}
+      </p>
+    </div>
+  )
+}
+
+// Reparto tipo WhatsApp: el mensaje PROPIO de un lado y el del cliente del
+// otro, cada uno con su esquina superior cuadrada del lado del remitente. Los
+// colores salen de tokens del tema (verde té y morado), así que el modo oscuro
+// se resuelve solo en index.css.
+const BURBUJA = {
+  agente: 'bg-burbuja-propia text-on-burbuja-propia rounded-tr-none',
+  cliente: 'bg-burbuja-cliente text-on-burbuja-cliente rounded-tl-none',
+  bot: 'bg-burbuja-cliente text-on-burbuja-cliente rounded-tl-none',
+}
+
+// Tinte para citas y pills DENTRO de la burbuja. Sigue al color de TEXTO de la
+// burbuja (currentColor), así que funciona igual sobre las burbujas claras del
+// modo claro y las oscuras del modo oscuro, sin condicionales.
+const TINTE_BORDE = 'border-current/30'
+const TINTE_FONDO = 'bg-current/10'
 
 function EstadoMensaje({ estado }) {
   if (!estado || estado === 'enviado') {
@@ -30,7 +67,8 @@ function EstadoMensaje({ estado }) {
     return <Icon name="done_all" className="text-[12px] opacity-50" />
   }
   if (estado === 'leido') {
-    return <Icon name="done_all" className="text-[12px] text-tertiary-fixed-dim" />
+    // Las dos palomitas azules de WhatsApp
+    return <Icon name="done_all" className="text-[12px] text-[#53bdeb]" />
   }
   if (estado === 'fallido') {
     return <Icon name="error" className="text-[12px] text-error" />
@@ -44,133 +82,12 @@ function motivoFallo(msg, tc) {
   return tc.erroresWa[msg.wa_codigo_error] || tc.falloGenerico(msg.wa_codigo_error || '?')
 }
 
-// Modal para enviar mensajes interactivos (botones de respuesta o lista)
-function ModalInteractivo({ onEnviar, onClose }) {
-  const { t } = useLang()
-  const tm = t.chats.modal
-  const [tipo, setTipo] = useState('botones')
-  const [cuerpo, setCuerpo] = useState('')
-  const [botones, setBotones] = useState('')
-  const [opciones, setOpciones] = useState('')
-  const [tituloBoton, setTituloBoton] = useState(tm.tituloBotonDefault)
-  const [enviando, setEnviando] = useState(false)
-  const [error, setError] = useState('')
-
-  const campo =
-    'w-full bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
-  const label = 'block text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1'
-
-  const listaBotones = botones.split(',').map((b) => b.trim()).filter(Boolean)
-  const listaOpciones = opciones.split('\n').map((o) => o.trim()).filter(Boolean)
-  const valido = cuerpo.trim() && (tipo === 'botones'
-    ? listaBotones.length >= 1 && listaBotones.length <= 3
-    : listaOpciones.length >= 1 && listaOpciones.length <= 10)
-
-  const enviar = async () => {
-    setEnviando(true)
-    setError('')
-    const payload = tipo === 'botones'
-      ? { tipo, cuerpo: cuerpo.trim(), botones: listaBotones }
-      : { tipo, cuerpo: cuerpo.trim(), titulo_boton: tituloBoton, opciones: listaOpciones }
-    const r = await onEnviar(payload)
-    if (r?.ok) {
-      onClose()
-    } else {
-      setError(r?.error || tm.errorEnvio)
-      setEnviando(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-neutral/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="border border-outline-variant bg-surface-container rounded-2xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-bold text-[15px]">{tm.titulo}</h3>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface p-1">
-            <Icon name="close" className="text-[18px] leading-none" />
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            {[['botones', tm.tabBotones], ['lista', tm.tabLista]].map(([valor, texto]) => (
-              <button
-                key={valor}
-                onClick={() => setTipo(valor)}
-                className={`px-3 py-1.5 rounded-lg text-[12px] font-display font-semibold transition-colors ${
-                  tipo === valor
-                    ? 'bg-primary text-on-primary'
-                    : 'bg-surface-container-lowest dark:bg-surface-container-high/50 text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                {texto}
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <label className={label}>{tm.textoMensaje}</label>
-            <textarea
-              className={`${campo} min-h-16 resize-y`}
-              maxLength={1024}
-              placeholder={tm.textoPlaceholder}
-              value={cuerpo}
-              onChange={(e) => setCuerpo(e.target.value)}
-            />
-          </div>
-
-          {tipo === 'botones' ? (
-            <div>
-              <label className={label}>{tm.botonesLabel}</label>
-              <input
-                className={campo}
-                placeholder={tm.botonesPlaceholder}
-                value={botones}
-                onChange={(e) => setBotones(e.target.value)}
-              />
-            </div>
-          ) : (
-            <>
-              <div>
-                <label className={label}>{tm.tituloBotonLabel}</label>
-                <input
-                  className={campo}
-                  maxLength={20}
-                  value={tituloBoton}
-                  onChange={(e) => setTituloBoton(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={label}>{tm.opcionesLabel}</label>
-                <textarea
-                  className={`${campo} min-h-20 resize-y`}
-                  placeholder={tm.opcionesPlaceholder}
-                  value={opciones}
-                  onChange={(e) => setOpciones(e.target.value)}
-                />
-              </div>
-            </>
-          )}
-
-          {error && <p className="text-[12px] text-error">{error}</p>}
-
-          <button
-            onClick={enviar}
-            disabled={!valido || enviando}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-40"
-          >
-            <Icon name="send" className="text-[15px] leading-none" />
-            {enviando ? tm.enviando : tm.enviar}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function VistaConversacion({
-  conversacion, onEnviar, onEnviarMedia, onEnviarInteractivo, onEnviarPlantilla, onTyping,
-  cargando, onEditarLead, leadPanelAbierto,
+  conversacion, onEnviar, onEnviarMedia, onTyping, cargando,
+  onEditarLead, leadPanelAbierto,
+  // Plantillas e interactivos se arman en el panel derecho (lo monta
+  // ConversacionesPanel); aquí solo van los botones que lo abren.
+  onAbrirPlantilla, onAbrirInteractivo, panelActivo,
 }) {
   const { lang, t } = useLang()
   const tc = t.chats
@@ -179,13 +96,37 @@ export default function VistaConversacion({
   const [enviando, setEnviando] = useState(false)
   const [enviandoArchivo, setEnviandoArchivo] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState('')
-  const [modalInteractivo, setModalInteractivo] = useState(false)
-  const [modalPlantilla, setModalPlantilla] = useState(false)
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(errorEnvio, setErrorEnvio)
   const scrollRef = useRef(null)
   const fileRef = useRef(null)
   const typingRef = useRef(0)
 
   const mensajes = conversacion?.mensajes || []
+  const nombreCliente = conversacion?.apodo || conversacion?.cliente_nombre || tc.sinNombre
+
+  // Índice wamid -> mensaje, para resolver las citas (wa_contexto_id).
+  // Depende de conversacion?.mensajes (referencia estable) y no de `mensajes`,
+  // que es un arreglo nuevo en cada render cuando aún no hay mensajes.
+  const porWamid = useMemo(() => {
+    const indice = new Map()
+    for (const msg of conversacion?.mensajes || []) {
+      if (msg.wa_mensaje_id) indice.set(msg.wa_mensaje_id, msg)
+    }
+    return indice
+  }, [conversacion?.mensajes])
+
+  // Texto y acciones (botones/lista) ya separados, una vez por mensaje en vez
+  // de en cada uno de los tres puntos donde se pintan.
+  const accionesPorMensaje = useMemo(() => {
+    const indice = new Map()
+    for (const msg of conversacion?.mensajes || []) {
+      indice.set(msg.id, separarAcciones(msg.contenido || ''))
+    }
+    return indice
+  }, [conversacion?.mensajes])
+  const acciones = (msg) =>
+    accionesPorMensaje.get(msg.id) || separarAcciones(msg.contenido || '')
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -238,11 +179,18 @@ export default function VistaConversacion({
     setEnviandoArchivo(false)
   }
 
+  // Sin conversación abierta no hay lienzo de mensajes que justifique el gris:
+  // el panel va del color de las bandejas (blanco en claro, oscuro en oscuro).
+  const fondoVacio =
+    'flex flex-col items-center justify-center h-full bg-surface-container-lowest text-on-surface-variant'
+
   // Estado vacío
   if (!conversacion) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-on-surface-variant">
-        <Icon name="inventory_2" className="text-[44px] mb-3 text-outline-variant" />
+      <div className={fondoVacio}>
+        {/* Sin color propio: hereda el text-on-surface-variant del contenedor
+            y queda al mismo tono que el mensaje de abajo. */}
+        <Icon name="inventory_2" className="text-[44px] mb-3" />
         <p className="font-display font-semibold text-[13px]">{tc.emptyChat}</p>
       </div>
     )
@@ -250,34 +198,22 @@ export default function VistaConversacion({
 
   if (cargando) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-on-surface-variant">
+      <div className={fondoVacio}>
         <Icon name="hourglass_empty" className="text-[28px] animate-pulse" />
       </div>
     )
   }
 
   return (
-    <div className="group/chat relative flex flex-col h-full">
-      {/* Pestaña para abrir/cerrar el panel del lead — estilo lengüeta del sidebar */}
-      {onEditarLead && (
-        <button
-          onClick={onEditarLead}
-          title={tc.editarLead}
-          className={`hidden lg:flex absolute top-2 right-0 z-20
-            px-1 py-3 rounded-l-xl bg-surface-container-high
-            text-on-surface-variant hover:bg-primary/10 hover:text-primary
-            transition-all duration-300 items-center justify-center
-            ${leadPanelAbierto ? 'opacity-100 text-primary' : 'opacity-0 group-hover/chat:opacity-100'}`}
-        >
-          <Icon name={leadPanelAbierto ? 'chevron_right' : 'chevron_left'} className="text-[16px] leading-none" />
-        </button>
-      )}
+    <div className="flex flex-col h-full">
       {/* Header */}
       {(() => {
         const nombre = conversacion.nombre_mostrar || conversacion.cliente_nombre || tc.sinNombre
         const esLead = nombre.startsWith('Lead ')
+        // Barra superior: mismo fondo que las bandejas, no el lienzo del chat,
+        // para que el encabezado se lea como parte del panel.
         return (
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-variant/20">
+          <div className="flex items-center gap-3 px-5 py-4 bg-surface-container-lowest border-b border-outline-variant/20">
             {conversacion.cliente_foto ? (
               <img src={conversacion.cliente_foto} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
             ) : (
@@ -286,7 +222,7 @@ export default function VistaConversacion({
                   <Icon name="person" className="text-[20px] leading-none" />
                 ) : (
                   <span className="font-display font-semibold text-[13px]">
-                    {nombre[0].toUpperCase()}
+                    {iniciales(nombre)}
                   </span>
                 )}
               </div>
@@ -302,12 +238,33 @@ export default function VistaConversacion({
             <div className="flex items-center gap-1.5">
               <img src="/icons/whatsapp.svg" alt="" className="w-4 h-4 opacity-50" />
               <span className={`text-[11px] font-display font-semibold px-2 py-0.5 rounded-full ${
-                conversacion.estado === 'activa' ? 'bg-accent/20 text-on-accent' :
+                // Sobre un TINTE de accent el texto va en el color de texto del
+                // tema, no en on-accent (que es para el relleno sólido y queda
+                // ilegible en ambos modos). Mismo patrón que los badges de
+                // Plantillas y Contactos.
+                conversacion.estado === 'activa' ? 'bg-accent/20 text-on-surface' :
                 conversacion.estado === 'espera' ? 'bg-surface-container-highest text-on-surface' :
                 'bg-surface-container-high text-on-surface-variant'
               }`}>
                 {tc.estadoConversacion[conversacion.estado] || conversacion.estado}
               </span>
+              {/* Abrir/cerrar el panel del lead. Antes era una lengüeta flotante
+                  que solo aparecía al pasar el mouse; ahora vive fija aquí. */}
+              {onEditarLead && (
+                <button
+                  onClick={onEditarLead}
+                  title={tc.editarLead}
+                  aria-label={tc.editarLead}
+                  aria-pressed={leadPanelAbierto}
+                  className={`ml-0.5 p-1 transition-colors ${
+                    leadPanelAbierto
+                      ? 'text-primary'
+                      : 'text-on-surface-variant hover:text-primary'
+                  }`}
+                >
+                  <Icon name="split_scene" className="text-[18px] leading-none" />
+                </button>
+              )}
             </div>
           </div>
         )
@@ -321,13 +278,15 @@ export default function VistaConversacion({
             className={`flex ${msg.tipo_remitente === 'cliente' ? 'justify-start' : 'justify-end'}`}
           >
             <div className={`max-w-[75%] flex flex-col ${msg.tipo_remitente === 'cliente' ? 'items-start' : 'items-end'}`}>
-            <div className={`px-4 py-2.5 rounded-2xl ${
-              msg.tipo_remitente === 'cliente'
-                ? 'bg-[#7a9a4e] text-white'
-                : msg.tipo_remitente === 'bot'
-                ? 'bg-tertiary/10'
-                : 'bg-primary text-on-primary'
-            }`}>
+            <div className={`px-2.5 py-1.5 rounded-lg shadow-sm ${BURBUJA[msg.tipo_remitente] || BURBUJA.bot}`}>
+              {msg.wa_contexto_id && (
+                <MensajeCitado
+                  citado={porWamid.get(msg.wa_contexto_id)}
+                  nombreCliente={nombreCliente}
+                  esReaccion={msg.tipo_mensaje === 'reaccion'}
+                  tc={tc}
+                />
+              )}
               {msg.url_media && msg.tipo_mensaje === 'imagen' && (
                 <img
                   src={mediaUrl(msg)}
@@ -354,42 +313,29 @@ export default function VistaConversacion({
                   <span className="text-[13px] underline">{tc.abrirDocumento}</span>
                 </a>
               )}
-              {msg.contenido ? (() => {
-                const { texto, botones } = separarBotones(msg.contenido)
-                return (
-                  <>
-                    {texto && (
-                      <p className="text-[13px] leading-[1.6] whitespace-pre-wrap">{texto}</p>
-                    )}
-                    {botones.length > 0 && (
-                      <div className="mt-2 pt-1.5 border-t border-white/20 space-y-1">
-                        {botones.map((b) => (
-                          <div
-                            key={b}
-                            className="text-center text-[13px] font-display font-semibold py-1.5 rounded-lg bg-white/15"
-                          >
-                            {b}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+              {msg.contenido ? (
+                acciones(msg).texto && (
+                  <p className="text-[13px] leading-[1.6] whitespace-pre-wrap">{acciones(msg).texto}</p>
                 )
-              })() : !msg.url_media ? (
+              ) : !msg.url_media ? (
                 <p className="text-[13px] leading-[1.6] italic opacity-70">[{tc.tipoMensaje[msg.tipo_mensaje] || msg.tipo_mensaje}]</p>
               ) : null}
-              <div className={`flex items-center gap-1 mt-1 ${
-                msg.tipo_remitente === 'cliente' ? 'justify-end' : 'justify-end'
-              }`}>
-                <span className={`text-[11px] ${
-                  msg.tipo_remitente === 'agente' ? 'opacity-70'
-                    : msg.tipo_remitente === 'cliente' ? 'text-white/70'
-                    : 'text-on-surface-variant'
-                }`}>
+              {/* Hora y palomitas abajo a la derecha, dentro de la burbuja.
+                  El color lo hereda del texto de la burbuja, así que un solo
+                  nivel de opacidad sirve para los tres remitentes. */}
+              <div className="flex items-center justify-end gap-1 -mb-0.5 mt-0.5">
+                <span className="text-[11px] opacity-60">
                   {formatearHoraMensaje(msg.creado_en, locale)}
                 </span>
                 {msg.tipo_remitente === 'agente' && <EstadoMensaje estado={msg.wa_estado} />}
               </div>
+
+              {/* Botones y lista al final de la burbuja, después de la hora y
+                  separados por divisorias: una sola tarjeta continua. */}
+              <AccionesBurbuja
+                botones={acciones(msg).botones}
+                tituloLista={acciones(msg).tituloLista}
+              />
             </div>
 
             {/* Causa del fallo de entrega, DEBAJO de la burbuja (legible) */}
@@ -419,11 +365,8 @@ export default function VistaConversacion({
         ))}
       </div>
 
-      {/* Composer */}
-      <div className="px-5 py-4 border-t border-outline-variant/20">
-        {errorEnvio && (
-          <p className="text-[12px] text-error mb-2">{errorEnvio}</p>
-        )}
+      {/* Composer — barra inferior: mismo fondo que las bandejas (ver header) */}
+      <div className="px-5 py-4 bg-surface-container-lowest border-t border-outline-variant/20">
         <div className="flex items-end gap-2">
           {/* Adjuntar archivo */}
           <input
@@ -443,17 +386,25 @@ export default function VistaConversacion({
           </button>
           {/* Mensaje interactivo (botones/lista) */}
           <button
-            onClick={() => setModalInteractivo(true)}
+            onClick={onAbrirInteractivo}
             title={tc.enviarInteractivoTitle}
-            className="w-11 h-11 rounded-2xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 flex items-center justify-center transition-all shrink-0"
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all shrink-0 ${
+              panelActivo === 'interactivo'
+                ? 'text-primary bg-primary/5'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
+            }`}
           >
             <Icon name="ballot" className="text-[18px]" />
           </button>
           {/* Plantilla aprobada (fuera de la ventana de 24h) */}
           <button
-            onClick={() => setModalPlantilla(true)}
+            onClick={onAbrirPlantilla}
             title={tc.enviarPlantillaTitle}
-            className="w-11 h-11 rounded-2xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 flex items-center justify-center transition-all shrink-0"
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all shrink-0 ${
+              panelActivo === 'plantilla'
+                ? 'text-primary bg-primary/5'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
+            }`}
           >
             <Icon name="article" className="text-[18px]" />
           </button>
@@ -463,33 +414,22 @@ export default function VistaConversacion({
             onKeyDown={handleKeyDown}
             placeholder={tc.escribeMensaje}
             rows={1}
-            className="flex-1 bg-surface-container-lowest rounded-2xl px-5 py-3 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none max-h-32"
+            // La caja la define el BORDE: el relleno (#f0f0f1) contra la barra
+            // blanca es una diferencia mínima, y outline-variant (#e5e5e7) es
+            // el gris de las divisorias, demasiado tenue para un campo. Con
+            // outline/40 se ve en los dos modos sin endurecerse.
+            className="flex-1 bg-surface-container-high border border-outline/40 rounded-2xl px-5 py-3 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none focus:border-primary/50 transition-colors resize-none max-h-32"
           />
           <button
             onClick={handleEnviar}
             disabled={!texto.trim() || enviando}
-            className="w-11 h-11 rounded-2xl bg-primary text-on-primary flex items-center justify-center transition-all active:scale-[0.95] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            className="w-11 h-11 border border-primary text-primary flex items-center justify-center transition-all active:scale-[0.95] hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           >
             <Icon name="send" className="text-[18px]" />
           </button>
         </div>
       </div>
 
-      {/* Modal de envio de plantilla */}
-      {modalPlantilla && (
-        <EnviarPlantillaModal
-          onEnviar={onEnviarPlantilla}
-          onClose={() => setModalPlantilla(false)}
-        />
-      )}
-
-      {/* Modal de mensaje interactivo */}
-      {modalInteractivo && (
-        <ModalInteractivo
-          onEnviar={onEnviarInteractivo}
-          onClose={() => setModalInteractivo(false)}
-        />
-      )}
     </div>
   )
 }

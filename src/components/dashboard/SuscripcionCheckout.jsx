@@ -716,7 +716,7 @@ export default function SuscripcionCheckout() {
                   <p className="text-[12px] text-on-surface-variant border border-outline-variant rounded-lg p-2.5 mb-3">{avisoVerificacion}</p>
                 )}
                 <button onClick={verificarPago} disabled={verificando}
-                  className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50 flex items-center gap-2">
+                  className="border border-primary text-primary px-5 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-50 flex items-center gap-2">
                   {verificando && <span className="w-4 h-4 border-2 border-on-primary/40 border-t-on-primary rounded-full animate-spin" />}
                   Ya transferí — verificar pago
                 </button>
@@ -745,7 +745,7 @@ export default function SuscripcionCheckout() {
                   <p className="text-[12px] text-on-surface-variant border border-outline-variant rounded-lg p-2.5 mt-4">{avisoVerificacion}</p>
                 )}
                 <button onClick={verificarPago} disabled={verificando}
-                  className="block mx-auto mt-5 bg-primary text-on-primary px-6 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50">
+                  className="block mx-auto mt-5 border border-primary text-primary px-6 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-50">
                   {verificando ? 'Verificando…' : 'Ya completé la verificación'}
                 </button>
               </div>

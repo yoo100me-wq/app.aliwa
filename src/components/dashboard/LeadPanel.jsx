@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { apiFetch } from '../../utils/api'
+import { LADAS, telefonoConLada } from '../../utils/ladas'
 import { useLang } from '../../i18n-app'
 import Icon from '../shared/Icon'
+import useErrorToast from '../../hooks/useErrorToast'
 
 // Labels vía t.lead.tabs / t.lead.generos (claves técnicas sin cambiar)
 const TABS = [
@@ -17,25 +19,45 @@ const GENEROS = [
   { v: 'otro', clave: 'otro' },
 ]
 
-const campoBase =
-  'w-full bg-surface-container-high/50 px-2.5 py-1.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none transition-all'
+// Sin ancho, para componer en filas flex (la lada junto al número). Agregarle
+// `w-auto` a `campoBase` NO sirve: Tailwind emite .w-full después de .w-auto,
+// así que el 100% gana y el campo de al lado se queda sin espacio.
+const campoSinAncho =
+  'bg-surface-container-high/50 px-2.5 py-1.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none transition-all'
+const campoBase = `w-full ${campoSinAncho}`
 const labelBase =
   'block text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1'
 
-export default function LeadPanel({ prospectoId, onClose, onSaved }) {
+// conCerrar: muestra la X en el header. En chats el panel se cierra con el
+// botón del header del chat; en Contactos no hay toggle, así que lleva X.
+// nuevo: el panel arranca en modo alta (solo lada+teléfono y correo). Al
+// guardar crea el contacto y se queda abierto, ya en modo edición, para
+// completar el resto sin volver a la lista.
+export default function LeadPanel({ prospectoId, onClose, onSaved, conCerrar = false, nuevo = false }) {
   const { t } = useLang()
   const tl = t.lead
   const [tab, setTab] = useState('datos')
-  const [cargando, setCargando] = useState(true)
+  // En modo alta no hay nada que traer: el formulario arranca vacío y listo.
+  const [cargando, setCargando] = useState(!!prospectoId)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState(null)
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(error, setError)
+  const [form, setForm] = useState(prospectoId ? null : {})
   const [usuarios, setUsuarios] = useState([])
+  // Id efectivo: al guardar el alta pasa a ser el del contacto recién creado, y
+  // el efecto de carga lo trae completo (ya con su código de lead).
+  const [idActual, setIdActual] = useState(prospectoId || null)
+  const [pais, setPais] = useState(LADAS[0])
+  const [telefono, setTelefono] = useState('')
+  const esNuevo = nuevo && !idActual
+
+  useEffect(() => { setIdActual(prospectoId || null) }, [prospectoId])
 
   useEffect(() => {
-    if (!prospectoId) return
+    if (!idActual) return
     setCargando(true)
-    apiFetch(`/api/contactos/${prospectoId}/`)
+    apiFetch(`/api/contactos/${idActual}/`)
       .then(({ res, data }) => {
         if (res.ok) {
           // El apodo arranca con el nombre que la persona puso en WhatsApp
@@ -45,7 +67,8 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
       })
       .catch(() => setError(tl.errConexion))
       .finally(() => setCargando(false))
-  }, [prospectoId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idActual])
 
   useEffect(() => {
     apiFetch('/api/usuarios/')
@@ -55,11 +78,40 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
 
   const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }))
 
-  const guardar = async () => {
+  // Alta: solo teléfono y correo. El nombre lo pone después el propio WhatsApp
+  // del contacto (o se edita aquí mismo una vez creado).
+  const crear = async () => {
+    const tel = telefonoConLada(telefono, pais)
+    if (!tel) {
+      setError(tl.errTelefonoRequerido)
+      return
+    }
     setGuardando(true)
     setError('')
     try {
-      const { res, data } = await apiFetch(`/api/contactos/${prospectoId}/`, {
+      const { res, data } = await apiFetch('/api/contactos/', {
+        method: 'POST',
+        body: JSON.stringify({ telefono: tel, correo: form.correo || '', origen: 'manual' }),
+      })
+      if (res.ok) {
+        onSaved?.(data)
+        setIdActual(data.id)   // el panel pasa a modo edición con el contacto ya creado
+      } else {
+        setError(data?.error || data?.telefono?.[0] || tl.errGuardar)
+      }
+    } catch {
+      setError(tl.errConexion)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const guardar = async () => {
+    if (esNuevo) return crear()
+    setGuardando(true)
+    setError('')
+    try {
+      const { res, data } = await apiFetch(`/api/contactos/${idActual}/`, {
         method: 'PATCH',
         body: JSON.stringify({
           apodo: form.apodo || '',
@@ -87,18 +139,27 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
       {/* Header — guardar en el lugar donde estaba la x */}
       <div className="flex items-center justify-between gap-2 px-4 h-11 shrink-0">
         <h2 className="font-display font-bold text-[15px] truncate min-w-0">
-          {form?.codigo_contacto ? tl.tituloLead(form.codigo_contacto) : tl.editarLead}
+          {esNuevo ? tl.nuevoContacto
+            : form?.codigo_contacto ? tl.tituloLead(form.codigo_contacto) : tl.editarLead}
         </h2>
-        {tab === 'datos' && !cargando && (
-          <button onClick={guardar} disabled={guardando} title={tl.guardar}
-            className="shrink-0 p-1 text-on-surface-variant hover:text-primary transition-colors disabled:opacity-50">
-            <Icon name={guardando ? 'hourglass_empty' : 'save'} className={`text-[18px] leading-none ${guardando ? 'animate-pulse' : ''}`} />
-          </button>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {tab === 'datos' && !cargando && (
+            <button onClick={guardar} disabled={guardando} title={tl.guardar}
+              className="p-1 text-on-surface-variant hover:text-primary transition-colors disabled:opacity-50">
+              <Icon name={guardando ? 'hourglass_empty' : 'save'} className={`text-[18px] leading-none ${guardando ? 'animate-pulse' : ''}`} />
+            </button>
+          )}
+          {conCerrar && (
+            <button onClick={onClose} title={tl.cerrar}
+              className="p-1 text-on-surface-variant hover:text-on-surface transition-colors">
+              <Icon name="close" className="text-[18px] leading-none" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Info de solo lectura (viene de WhatsApp, no editable) */}
-      {!cargando && form && (
+      {!cargando && form && !esNuevo && (
         <div className="px-4 py-2 bg-surface-container-high/30 space-y-1">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[10px] tracking-wide uppercase text-outline-variant font-display font-semibold shrink-0">{tl.telefono}</span>
@@ -113,8 +174,8 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
 
       <div className="h-px bg-outline-variant" />
 
-      {/* Tabs */}
-      <div className="flex px-4 pt-2 gap-1">
+      {/* Tabs — Cargos y Citas no existen todavía para un contacto sin crear */}
+      <div className={`flex px-4 pt-2 gap-1 ${esNuevo ? 'hidden' : ''}`}>
         {TABS.map((tb) => (
           <button
             key={tb.id}
@@ -135,6 +196,38 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {cargando ? (
           <div className="py-10 text-center text-[13px] text-on-surface-variant">{tl.cargando}</div>
+        ) : esNuevo ? (
+          <div className="space-y-3">
+            <div>
+              <label className={labelBase}>{tl.telefono}</label>
+              <div className="flex gap-1.5">
+                <select
+                  className={`${campoSinAncho} shrink-0 w-[84px] pr-1`}
+                  value={pais.codigo}
+                  onChange={(e) => setPais(LADAS.find((l) => l.codigo === e.target.value) || LADAS[0])}
+                  title={pais.nombre}
+                >
+                  {LADAS.map((l) => (
+                    <option key={l.codigo} value={l.codigo}>{l.bandera} {l.lada}</option>
+                  ))}
+                </select>
+                <input
+                  className={`${campoSinAncho} flex-1 min-w-0`}
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  placeholder={tl.phTelefono}
+                  inputMode="tel"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelBase}>{tl.correo}</label>
+              <input type="email" className={campoBase} value={form.correo || ''}
+                onChange={(e) => set('correo', e.target.value)} placeholder={tl.phCorreo} />
+            </div>
+            <p className="text-[11px] text-on-surface-variant leading-relaxed">{tl.ayudaAltaRapida}</p>
+          </div>
         ) : tab === 'datos' ? (
           <div className="space-y-3">
             <div>
@@ -176,7 +269,6 @@ export default function LeadPanel({ prospectoId, onClose, onSaved }) {
               <label className={labelBase}>{tl.notas}</label>
               <textarea className={`${campoBase} resize-none`} rows={3} value={form.notas || ''} onChange={(e) => set('notas', e.target.value)} placeholder={tl.phNotas} />
             </div>
-            {error && <p className="text-[12px] text-error font-display">{error}</p>}
           </div>
         ) : (
           <div className="py-10 flex flex-col items-center text-center text-on-surface-variant">

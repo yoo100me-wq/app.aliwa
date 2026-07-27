@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react'
 import { apiFetch } from '../../utils/api'
 import { useLang } from '../../i18n-app'
 import Icon from '../shared/Icon'
+import { iniciales } from '../../utils/iniciales'
+import useErrorToast from '../../hooks/useErrorToast'
 
-function iniciales(nombre) {
-  if (!nombre) return '?'
-  const p = nombre.trim().split(' ')
-  return (p.length >= 2 ? p[0][0] + p[1][0] : p[0][0]).toUpperCase()
-}
+
 
 const campo =
   'w-full bg-surface-container-lowest rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
@@ -26,6 +24,8 @@ export default function EquipoSection({ limite, usuarioActualId }) {
   const [form, setForm] = useState(FORM_VACIO)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(error, setError)
   const [aviso, setAviso] = useState('')
 
   const cargar = () => Promise.all([
@@ -93,7 +93,7 @@ export default function EquipoSection({ limite, usuarioActualId }) {
           onClick={() => !alLimite && setAbierto((v) => !v)}
           disabled={alLimite}
           title={alLimite ? te.limiteAlcanzadoTitle : te.invitarUsuario}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Icon name={abierto ? 'close' : 'person_add'} className="text-[16px] leading-none" />
           {abierto ? te.cancelar : te.invitarUsuario}
@@ -141,7 +141,6 @@ export default function EquipoSection({ limite, usuarioActualId }) {
               <option value="admin">{te.optAdmin}</option>
             </select>
           </div>
-          {error && <p className="text-[12px] text-error font-display">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={() => { setAbierto(false); setError('') }} className="px-3 py-1.5 text-[13px] font-display text-on-surface-variant hover:text-on-surface transition-colors">
               {te.cancelar}
@@ -149,7 +148,7 @@ export default function EquipoSection({ limite, usuarioActualId }) {
             <button
               onClick={invitar}
               disabled={guardando}
-              className="px-4 py-1.5 rounded-lg bg-primary text-on-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:opacity-90 disabled:opacity-50"
+              className="px-4 py-1.5 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-50"
             >
               {guardando ? te.enviando : te.enviarInvitacion}
             </button>

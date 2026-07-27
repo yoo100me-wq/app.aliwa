@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../../utils/api'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
+import useErrorToast from '../../hooks/useErrorToast'
 
 // Paso "Openpay" de la guía de inicio: el negocio autoriza a Aliwa (OAuth 2.0
 // de partners) en un popup de Openpay. El popup redirige a /openpay-callback,
@@ -13,6 +14,8 @@ export default function OpenpaySection({ negocio, onConectado, onSiguiente, onOm
   const [conectando, setConectando] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  // Los errores salen como notificación arriba a la derecha
+  useErrorToast(error, setError)
   const [resultado, setResultado] = useState(null)
   const limpiarRef = useRef(null)
 
@@ -120,13 +123,10 @@ export default function OpenpaySection({ negocio, onConectado, onSiguiente, onOm
             {to.comercio}: <span className="font-display font-semibold">{resultado.merchant_id}</span>
           </p>
         )}
-        {error && (
-          <div className="bg-error/10 text-error text-[13px] font-body rounded-lg px-3 py-2 mb-4">{error}</div>
-        )}
         <div className="flex items-center gap-3 mt-4">
           <button
             onClick={onSiguiente}
-            className="bg-primary text-on-primary px-5 py-2.5 rounded-lg font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:opacity-90 flex items-center gap-1.5"
+            className="border border-primary text-primary px-5 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 flex items-center gap-1.5"
           >
             {to.siguiente}
             <Icon name="arrow_forward" className="text-[15px]" />
@@ -159,9 +159,6 @@ export default function OpenpaySection({ negocio, onConectado, onSiguiente, onOm
         ))}
       </ul>
       <p className="text-[12px] font-body text-on-surface-variant mb-4">{to.avisoPopup}</p>
-      {error && (
-        <div className="bg-error/10 text-error text-[13px] font-body rounded-lg px-3 py-2 mb-4">{error}</div>
-      )}
       <div className="flex items-center gap-3">
         <button
           onClick={conectar}

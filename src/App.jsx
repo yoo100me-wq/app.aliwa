@@ -7,6 +7,7 @@ import SetupBusinessPage from './pages/SetupBusinessPage'
 import ConfirmarInvitacionPage from './pages/ConfirmarInvitacionPage'
 import OpenpayCallbackPage from './pages/OpenpayCallbackPage'
 import { LangProvider } from './i18n-app'
+import { ToastProvider } from './components/shared/Toasts'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -25,7 +26,7 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegisterPage />} />
-        <Route path="/dashboard" element={<LangProvider><DashboardPage /></LangProvider>} />
+        <Route path="/dashboard" element={<LangProvider><ToastProvider><DashboardPage /></ToastProvider></LangProvider>} />
         <Route path="/configurar-negocio" element={<SetupBusinessPage />} />
         <Route path="/confirmar-invitacion" element={<ConfirmarInvitacionPage />} />
         <Route path="/openpay-callback" element={<OpenpayCallbackPage />} />

@@ -32,6 +32,10 @@ export const es = {
     video: 'video', ubicacion: 'ubicacion', boton: 'boton',
     plantilla: 'plantilla', reaccion: 'reaccion',
   },
+  // Cita del mensaje al que se está respondiendo (context.id de Meta)
+  citaTu: 'Tú',
+  citaNoDisponible: 'Mensaje original',
+  citaReaccion: 'Reaccionó a',
   errorArchivo: 'No se pudo enviar el archivo',
   errorConexion: 'Error de conexión',
   // Códigos de error de entrega de Meta (statuses failed)
@@ -59,6 +63,8 @@ export const es = {
     errorEnvio: 'No se pudo enviar el mensaje',
     enviar: 'Enviar',
     enviando: 'Enviando...',
+    previaVacia: 'Escribe el mensaje para verlo aquí',
+    hojaPie: 'Toca para seleccionar un elemento',
   },
 }
 
@@ -94,6 +100,10 @@ export const en = {
     video: 'video', ubicacion: 'location', boton: 'button',
     plantilla: 'template', reaccion: 'reaction',
   },
+  // Quoted message being replied to (Meta's context.id)
+  citaTu: 'You',
+  citaNoDisponible: 'Original message',
+  citaReaccion: 'Reacted to',
   errorArchivo: 'The file could not be sent',
   errorConexion: 'Connection error',
   // Meta delivery error codes (failed statuses)
@@ -121,5 +131,7 @@ export const en = {
     errorEnvio: 'The message could not be sent',
     enviar: 'Send',
     enviando: 'Sending...',
+    previaVacia: 'Type the message to preview it here',
+    hojaPie: 'Tap to select an item',
   },
 }

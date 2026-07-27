@@ -26,6 +26,10 @@ export const es = {
   nacimiento: 'Nacimiento',
   correo: 'Correo',
   phCorreo: 'correo@ejemplo.com',
+  nuevoContacto: 'Nuevo contacto',
+  phTelefono: '8281234567',
+  errTelefonoRequerido: 'El teléfono es requerido',
+  ayudaAltaRapida: 'Con el teléfono basta. El nombre se llena solo con el de su WhatsApp en cuanto te escriba, y aquí lo puedes cambiar.',
   notas: 'Notas',
   phNotas: 'Notas internas del lead...',
   cargando: 'Cargando...',
@@ -36,6 +40,7 @@ export const es = {
   cancelar: 'Cancelar',
   guardando: 'Guardando...',
   guardar: 'Guardar',
+  cerrar: 'Cerrar',
 }
 
 export const en = {
@@ -65,6 +70,10 @@ export const en = {
   nacimiento: 'Date of birth',
   correo: 'Email',
   phCorreo: 'email@example.com',
+  nuevoContacto: 'New contact',
+  phTelefono: '5551234567',
+  errTelefonoRequerido: 'Phone number is required',
+  ayudaAltaRapida: "The phone number is enough. The name fills in from their WhatsApp as soon as they message you, and you can change it here.",
   notas: 'Notes',
   phNotas: 'Internal notes about this lead...',
   cargando: 'Loading...',
@@ -75,4 +84,5 @@ export const en = {
   cancelar: 'Cancel',
   guardando: 'Saving...',
   guardar: 'Save',
+  cerrar: 'Close',
 }
