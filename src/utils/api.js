@@ -4,6 +4,14 @@ const API_URL = import.meta.env.VITE_ENV === 'production'
   ? import.meta.env.VITE_API_URL
   : ''
 
+// Para las URLs que NO pasan por apiFetch y las consume el navegador solo
+// (un <img src>, un <video src>, un enlace de descarga). Sin esto, en
+// producción quedan relativas y pegan contra app.aliwa.mx, que devuelve el
+// index.html del SPA en vez del binario.
+export function apiUrl(endpoint) {
+  return `${API_URL}${endpoint}`
+}
+
 // Endpoints públicos (AllowAny): un 401 aquí es un error del propio flujo
 // (p.ej. credenciales incorrectas en login), NO una sesión expirada — no redirige.
 const ENDPOINTS_PUBLICOS = [

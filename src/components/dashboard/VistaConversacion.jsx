@@ -4,6 +4,7 @@ import { useLang } from '../../i18n-app'
 import { colorAvatar } from './avatarColor'
 import { iniciales } from '../../utils/iniciales'
 import { separarAcciones } from '../../utils/accionesMensaje'
+import { apiUrl } from '../../utils/api'
 import { AccionesBurbuja } from './accionesMensaje'
 import useErrorToast from '../../hooks/useErrorToast'
 
@@ -207,9 +208,12 @@ export default function VistaConversacion({
     }
   }, [mensajes.length])
 
-  // URL del proxy de media (la URL directa de Meta expira en ~5 min)
+  // URL del proxy de media (la URL directa de Meta expira en ~5 min).
+  // Va por apiUrl y no relativa: el navegador pide esto por su cuenta desde
+  // <img>/<video>, sin pasar por apiFetch, así que en producción tiene que
+  // llevar el host de la API o pega contra app.aliwa.mx y recibe el index.html.
   const mediaUrl = (msg) =>
-    `/api/conversaciones/${conversacion.id}/media/${encodeURIComponent(msg.url_media)}/`
+    apiUrl(`/api/conversaciones/${conversacion.id}/media/${encodeURIComponent(msg.url_media)}/`)
 
   const handleEnviar = async () => {
     const contenido = texto.trim()

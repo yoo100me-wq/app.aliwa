@@ -39,11 +39,19 @@ export default function EnviarUbicacionPanel({ onEnviar, onClose }) {
         setLongitud(coords.longitude.toFixed(6))
         setUbicando(false)
       },
-      () => {
+      (err) => {
+        // En escritorio esto falla seguido: no hay GPS y la triangulación por
+        // WiFi/IP tarda o no resuelve. Se deja el motivo en consola porque el
+        // mensaje al usuario es el mismo para los tres casos (1=permiso
+        // denegado, 2=posición no disponible, 3=timeout) y sin esto no hay
+        // forma de saber cuál fue. Siempre queda escribir las coordenadas.
+        console.warn('[ubicacion] geolocalización falló:', err?.code, err?.message)
         setError(tu.sinGeolocalizacion)
         setUbicando(false)
       },
-      { timeout: 10000 },
+      // maximumAge acepta una lectura previa de hasta 5 min: en escritorio
+      // sube mucho la probabilidad de resolver en vez de expirar.
+      { timeout: 15000, maximumAge: 300000 },
     )
   }
 
