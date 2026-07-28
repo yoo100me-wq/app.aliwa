@@ -6,6 +6,8 @@ import VistaConversacion from './VistaConversacion'
 import LeadPanel from './LeadPanel'
 import EnviarPlantillaModal from './EnviarPlantillaModal'
 import EnviarInteractivoPanel from './EnviarInteractivoPanel'
+import EnviarUbicacionPanel from './EnviarUbicacionPanel'
+import EnviarFormularioPanel from './EnviarFormularioPanel'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
 
@@ -46,10 +48,14 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
       .sort((a, b) => a.telefono.localeCompare(b.telefono))
   }, [numerosCuenta, conversaciones])
 
-  // Qué ocupa la columna derecha: null | 'lead' | 'plantilla' | 'interactivo'.
-  // Son excluyentes: abrir uno cierra el anterior.
+  // Qué ocupa la columna derecha: null | 'lead' | 'plantilla' | 'interactivo'
+  // | 'ubicacion'. Son excluyentes: abrir uno cierra el anterior.
   const [panelDerecho, setPanelDerecho] = useState(null)
   const leadModalOpen = panelDerecho === 'lead'
+
+  // Bloqueo del contacto: el estado vive en Meta (Block API), así que se
+  // consulta al abrir la conversación y no se guarda en nuestra BD.
+  const [bloqueado, setBloqueado] = useState(false)
 
   // No leídos por grupo de asignación (para los badges del contenedor de filtros)
   const noLeidosPorGrupo = useMemo(() => {
@@ -118,6 +124,11 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
   // Seleccionar conversación
   const seleccionar = async (id) => {
     setCargandoDetalle(true)
+    setBloqueado(false)
+    // Estado de bloqueo en Meta (no bloquea la carga del chat)
+    apiFetch(`/api/conversaciones/${id}/bloquear/`)
+      .then(({ res, data }) => { if (res.ok) setBloqueado(Boolean(data.bloqueado)) })
+      .catch(() => {})
     try {
       const { res, data } = await apiFetch(`/api/conversaciones/${id}/`)
       if (res.ok) {
@@ -232,6 +243,69 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
     }
   }
 
+  // Reaccionar a un mensaje. `emoji` vacío quita la reacción anterior.
+  const enviarReaccion = async (waMensajeId, emoji) => {
+    if (!conversacionActiva) return { ok: false }
+    const id = conversacionActiva.id
+    try {
+      const { res, data } = await apiFetch(`/api/conversaciones/${id}/send-reaction/`, {
+        method: 'POST',
+        body: JSON.stringify({ wa_mensaje_id: waMensajeId, emoji }),
+      })
+      if (res.ok) await recargarActiva(id)
+      return { ok: res.ok, error: data?.error }
+    } catch {
+      return { ok: false, error: tc.errorConexion }
+    }
+  }
+
+  // Enviar un formulario (Flow) publicado
+  const enviarFormulario = async (payload) => {
+    if (!conversacionActiva) return { ok: false }
+    const id = conversacionActiva.id
+    try {
+      const { res, data } = await apiFetch(`/api/conversaciones/${id}/send-flow/`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) await recargarActiva(id)
+      return { ok: res.ok, error: data?.error }
+    } catch {
+      return { ok: false, error: tc.errorConexion }
+    }
+  }
+
+  // Enviar una ubicación (el mapa dentro del chat)
+  const enviarUbicacion = async (payload) => {
+    if (!conversacionActiva) return { ok: false }
+    const id = conversacionActiva.id
+    try {
+      const { res, data } = await apiFetch(`/api/conversaciones/${id}/send-location/`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) await recargarActiva(id)
+      return { ok: res.ok, error: data?.error }
+    } catch {
+      return { ok: false, error: tc.errorConexion }
+    }
+  }
+
+  // Bloquear / desbloquear al contacto en Meta
+  const alternarBloqueo = async () => {
+    if (!conversacionActiva) return { ok: false }
+    const siguiente = !bloqueado
+    try {
+      const { res, data } = await apiFetch(`/api/conversaciones/${conversacionActiva.id}/bloquear/`, {
+        method: siguiente ? 'POST' : 'DELETE',
+      })
+      if (res.ok) setBloqueado(siguiente)
+      return { ok: res.ok, error: data?.error }
+    } catch {
+      return { ok: false, error: tc.errorConexion }
+    }
+  }
+
   // "Escribiendo..." en el WhatsApp del cliente (fire-and-forget)
   const notificarTyping = () => {
     if (!conversacionActiva) return
@@ -294,6 +368,7 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
           onEnviarMedia={enviarMedia}
           onEnviarInteractivo={enviarInteractivo}
           onEnviarPlantilla={enviarPlantilla}
+          onReaccionar={enviarReaccion}
           onTyping={notificarTyping}
           cargando={cargandoDetalle}
           leadPanelAbierto={leadModalOpen}
@@ -302,6 +377,10 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
           panelActivo={panelDerecho}
           onAbrirPlantilla={() => setPanelDerecho((p) => (p === 'plantilla' ? null : 'plantilla'))}
           onAbrirInteractivo={() => setPanelDerecho((p) => (p === 'interactivo' ? null : 'interactivo'))}
+          onAbrirUbicacion={() => setPanelDerecho((p) => (p === 'ubicacion' ? null : 'ubicacion'))}
+          onAbrirFormulario={() => setPanelDerecho((p) => (p === 'formulario' ? null : 'formulario'))}
+          bloqueado={bloqueado}
+          onAlternarBloqueo={alternarBloqueo}
         />
 
         {/* Plantillas e interactivos FLOTAN sobre el chat: son de paso, y
@@ -316,6 +395,18 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
         {panelDerecho === 'interactivo' && conversacionActiva && (
           <EnviarInteractivoPanel
             onEnviar={enviarInteractivo}
+            onClose={() => setPanelDerecho(null)}
+          />
+        )}
+        {panelDerecho === 'ubicacion' && conversacionActiva && (
+          <EnviarUbicacionPanel
+            onEnviar={enviarUbicacion}
+            onClose={() => setPanelDerecho(null)}
+          />
+        )}
+        {panelDerecho === 'formulario' && conversacionActiva && (
+          <EnviarFormularioPanel
+            onEnviar={enviarFormulario}
             onClose={() => setPanelDerecho(null)}
           />
         )}

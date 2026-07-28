@@ -11,8 +11,9 @@ import * as plantillas from './plantillas'
 import * as numeros from './numeros'
 import * as openpay from './openpay'
 import * as contactos from './contactos'
+import * as formularios from './formularios'
 
-const NAMESPACES = { dash, chats, equipo, lead, plantillas, numeros, openpay, contactos }
+const NAMESPACES = { dash, chats, equipo, lead, plantillas, numeros, openpay, contactos, formularios }
 
 function construirT(lang) {
   const t = {}

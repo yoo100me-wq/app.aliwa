@@ -6,6 +6,7 @@ import useTheme from '../hooks/useTheme'
 import ConversacionesPanel from '../components/dashboard/ConversacionesPanel'
 import EquipoSection from '../components/dashboard/EquipoSection'
 import PlantillasSection from '../components/dashboard/PlantillasSection'
+import FormulariosSection from '../components/dashboard/FormulariosSection'
 import ContactosSection from '../components/dashboard/ContactosSection'
 import WhatsappSection from '../components/dashboard/WhatsappSection'
 import OpenpaySection from '../components/dashboard/OpenpaySection'
@@ -14,6 +15,12 @@ import { apiFetch, NEGOCIO_STORAGE_KEY } from '../utils/api'
 import { initFacebookSDK } from '../utils/facebook'
 import { useLang } from '../i18n-app'
 import { iniciales } from '../utils/iniciales'
+
+// Campos de la sección Configuración (mismo patrón que el resto del panel)
+const campoSettings =
+  'w-full bg-surface-container-high/50 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
+const labelSettings =
+  'block text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1'
 
 // Solo ids/iconos: los labels salen de t.dash.menu / t.dash.menuGrupos
 // Facturación, Pipelines, Citas, Embudo, Pago WhatsApp y Tienda se agregarán
@@ -28,6 +35,11 @@ const menuGroups = [
       { id: 'leads', icon: 'person_search' },
       { id: 'numbers', icon: 'call' },
       { id: 'customers', icon: 'stacks' },
+      // 'forms' (constructor de formularios) NO se ofrece al cliente: los
+      // formularios de agendar/pagar/facturar los provisiona y mantiene Aliwa,
+      // porque solo un formulario nuestro puede hablar con nuestro endpoint de
+      // datos en vivo. La sección sigue montada abajo: reactivarla es agregar
+      // aquí { id: 'forms', icon: 'assignment' }.
     ],
   },
 ]
@@ -241,6 +253,11 @@ export default function DashboardPage() {
     setSidebarOpen(false)
     setSettingsTab(tab)
     setSettingsMsg('')
+    if (tab === 'cambiar-password') {
+      setPassActual('')
+      setPassNueva('')
+      setPassConfirm('')
+    }
     if ((tab === 'cuenta' || tab === 'editar-cuenta') && usuario) {
       setEditNombre(usuario.nombre?.split(' ')[0] || '')
       setEditApellido(usuario.apellido || usuario.nombre?.split(' ').slice(1).join(' ') || '')
@@ -343,6 +360,9 @@ export default function DashboardPage() {
       setSettingsMsg(td.cuentaForm.errConexion)
     }
   }
+
+  // Los tres campos llenos y la nueva con el mínimo de Supabase (8)
+  const passListo = Boolean(passActual && passNueva.length >= 8 && passConfirm)
 
   const cambiarPassword = async () => {
     setSettingsMsg('')
@@ -712,7 +732,7 @@ export default function DashboardPage() {
                         <Icon name="history" className="text-[16px] leading-none" />
                         {td.panel.historialLogin}
                       </button>
-                      <button onClick={() => setSettingsTab('cambiar-password')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors">
+                      <button onClick={() => abrirSettings('cambiar-password')} className="w-full flex items-center gap-2 px-2 py-1 text-[13px] font-display text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-colors">
                         <Icon name="lock" className="text-[16px] leading-none" />
                         {td.panel.cambiarPassword}
                       </button>
@@ -725,7 +745,7 @@ export default function DashboardPage() {
 
           {/* Contenido principal. Chats, Plantillas y Números son full-bleed
               (paneles a altura completa, sin padding); el resto lleva padding. */}
-          <div className={`flex-1 min-w-0 overflow-y-auto ${['conversations', 'customers', 'numbers'].includes(activeSection) ? '' : 'px-4 md:px-6 pt-4 pb-6'}`}>
+          <div className={`flex-1 min-w-0 overflow-y-auto ${['conversations', 'customers', 'numbers', 'forms'].includes(activeSection) ? '' : 'px-4 md:px-6 pt-4 pb-6'}`}>
           {activeSection === 'settings' ? (
             settingsTab === 'suscripcion' ? (
               <SuscripcionCheckout />
@@ -963,6 +983,39 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+            ) : settingsTab === 'cambiar-password' ? (
+              /* La contraseña vive en Supabase Auth: el backend verifica la
+                 actual autenticando contra Supabase y aplica la nueva con la
+                 API de admin. Aquí solo se validan coincidencia y longitud. */
+              <div className="max-w-md mx-auto">
+                {settingsMsg && (
+                  <div className="mb-4 p-3 rounded-lg border border-outline-variant text-on-surface text-[13px] font-display">{settingsMsg}</div>
+                )}
+                <div className="space-y-3">
+                  <div>
+                    <label className={labelSettings}>{td.passForm.actual}</label>
+                    <input type="password" autoComplete="current-password" className={campoSettings}
+                      value={passActual} onChange={(e) => setPassActual(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelSettings}>{td.passForm.nueva}</label>
+                    <input type="password" autoComplete="new-password" className={campoSettings}
+                      value={passNueva} onChange={(e) => setPassNueva(e.target.value)} />
+                    <p className="text-[11px] text-on-surface-variant mt-1">{td.passForm.ayuda}</p>
+                  </div>
+                  <div>
+                    <label className={labelSettings}>{td.passForm.confirmar}</label>
+                    <input type="password" autoComplete="new-password" className={campoSettings}
+                      value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && passListo) cambiarPassword() }} />
+                  </div>
+                  <button onClick={cambiarPassword} disabled={!passListo}
+                    className="border border-primary text-primary px-6 py-2.5 font-display font-semibold text-[13px] transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-40 flex items-center gap-1.5">
+                    <Icon name="lock_reset" className="text-[15px] leading-none" />
+                    {td.passForm.guardar}
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="border border-outline-variant bg-surface-container rounded-2xl p-10 text-center">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-purple/8 mb-4">
@@ -1180,6 +1233,8 @@ export default function DashboardPage() {
             <ConversacionesPanel key={negocioActivo?.id} usuarioId={usuario?.id} numeros={numeros} numerosCargados={numerosCargados} />
           ) : activeSection === 'customers' ? (
             <PlantillasSection key={negocioActivo?.id} />
+          ) : activeSection === 'forms' ? (
+            <FormulariosSection key={negocioActivo?.id} />
           ) : activeSection === 'leads' ? (
             <ContactosSection key={negocioActivo?.id} />
           ) : activeSection === 'numbers' ? (

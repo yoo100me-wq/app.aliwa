@@ -40,6 +40,17 @@ export const es = {
   seleccionaVacio: 'Selecciona una plantilla de la lista para ver su detalle, o crea una nueva.',
   cancelar: 'Cancelar',
 
+  // Métricas de la plantilla (template_analytics de Meta)
+  metricas: {
+    titulo: (dias) => `Desempeño · últimos ${dias} días`,
+    enviados: 'Enviados',
+    entregados: 'Entregados',
+    leidos: 'Leídos',
+    clics: 'Clics',
+    cargando: 'Cargando métricas...',
+    sinDatos: 'Meta todavía no reporta envíos de esta plantilla.',
+  },
+
   // Avisos y errores
   avisoEnviada: (nombre) => `Plantilla "${nombre}" enviada a revisión de Meta.`,
   avisoEliminada: (nombre) => `Plantilla "${nombre}" eliminada.`,
@@ -145,6 +156,17 @@ export const en = {
   nueva: 'New',
   seleccionaVacio: 'Select a template from the list to see its details, or create a new one.',
   cancelar: 'Cancel',
+
+  // Template metrics (Meta's template_analytics)
+  metricas: {
+    titulo: (dias) => `Performance · last ${dias} days`,
+    enviados: 'Sent',
+    entregados: 'Delivered',
+    leidos: 'Read',
+    clics: 'Clicks',
+    cargando: 'Loading metrics...',
+    sinDatos: 'Meta has not reported any sends for this template yet.',
+  },
 
   // Notices and errors
   avisoEnviada: (nombre) => `Template "${nombre}" submitted for Meta review.`,

@@ -20,6 +20,9 @@ const ESTADO_CLASES = {
 const CATEGORIAS = ['UTILITY', 'MARKETING', 'AUTHENTICATION']
 const IDIOMAS = ['es_MX', 'es', 'en_US']
 
+// Ventana de las métricas de plantilla (Meta guarda hasta 90 días)
+const DIAS_METRICAS = 30
+
 const campo =
   'w-full bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg px-3 py-2 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none'
 const label = 'block text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1'
@@ -70,6 +73,8 @@ export default function PlantillasSection() {
   const [aviso, setAviso] = useState('')
   const [confirmando, setConfirmando] = useState('')
   const [sinNumero, setSinNumero] = useState(false)
+  const [metricas, setMetricas] = useState(null)
+  const [cargandoMetricas, setCargandoMetricas] = useState(false)
 
   const cargar = () => {
     setCargando(true)
@@ -193,8 +198,26 @@ export default function PlantillasSection() {
     }
   }
 
-  const abrirNueva = () => { setCreando(true); setSeleccionada(''); setError(''); setAviso('') }
-  const seleccionar = (nombre) => { setSeleccionada(nombre); setCreando(false); setError(''); setAviso('') }
+  const abrirNueva = () => { setCreando(true); setSeleccionada(''); setError(''); setAviso(''); setMetricas(null) }
+
+  // Al seleccionar se piden sus métricas a Meta (envíos, lecturas y clics de
+  // ESTA plantilla; las analíticas del panel de Números son de todo el número).
+  const seleccionar = (nombre) => {
+    setSeleccionada(nombre); setCreando(false); setError(''); setAviso('')
+    setMetricas(null)
+    const p = plantillas.find((x) => x.name === nombre)
+    if (!p?.id) return
+    setCargandoMetricas(true)
+    apiFetch(`/api/whatsapp/plantillas/metricas/?ids=${encodeURIComponent(p.id)}&dias=${DIAS_METRICAS}`)
+      .then(({ res, data }) => {
+        // Sin métricas no se estorba al usuario con un error: la plantilla
+        // puede ser nueva o Meta puede no tener datos todavía.
+        if (res.ok) setMetricas((data.metricas || [])[0] || null)
+      })
+      .catch(() => {})
+      .finally(() => setCargandoMetricas(false))
+  }
+
   const plantillaSel = plantillas.find((p) => p.name === seleccionada) || null
 
   if (sinNumero) {
@@ -450,6 +473,33 @@ export default function PlantillasSection() {
           )}
         </div>
       </div>
+      {/* Desempeño de ESTA plantilla (Meta). Va antes del envío para que el
+          negocio decida a quién mandarla sabiendo cómo le fue la última vez. */}
+      {(cargandoMetricas || metricas) && (
+        <div className="mb-5">
+          <p className={label}>{tp.metricas.titulo(DIAS_METRICAS)}</p>
+          {cargandoMetricas ? (
+            <p className="text-[12px] text-on-surface-variant">{tp.metricas.cargando}</p>
+          ) : metricas.enviados === 0 ? (
+            <p className="text-[12px] text-on-surface-variant">{tp.metricas.sinDatos}</p>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 max-w-md">
+              {[
+                [tp.metricas.enviados, metricas.enviados],
+                [tp.metricas.entregados, metricas.entregados],
+                [tp.metricas.leidos, metricas.leidos],
+                [tp.metricas.clics, metricas.clics],
+              ].map(([etiqueta, valor]) => (
+                <div key={etiqueta} className="rounded-lg bg-surface-container-lowest dark:bg-surface-container-high/40 px-3 py-2">
+                  <p className="font-display font-bold text-[17px] leading-tight">{valor}</p>
+                  <p className="text-[11px] text-on-surface-variant truncate">{etiqueta}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Plantilla a la IZQUIERDA, destinatarios a la DERECHA: se elige a quién
           mandarla viendo el mensaje, sin abrir un modal encima. */}
       <div className="flex flex-col lg:flex-row gap-6">

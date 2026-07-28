@@ -69,6 +69,11 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
   const [subiendoFoto, setSubiendoFoto] = useState(false)
   const [nombreEdit, setNombreEdit] = useState('')   // nombre visible en edición
   const [nombreGuardando, setNombreGuardando] = useState(false)
+  const [qrs, setQrs] = useState([])                 // códigos QR del número
+  const [qrCargando, setQrCargando] = useState(false)
+  const [qrMensaje, setQrMensaje] = useState('')     // mensaje del QR en creación
+  const [qrGuardando, setQrGuardando] = useState(false)
+  const [qrConfirmando, setQrConfirmando] = useState('')
 
   // notificar=true → avisa al padre (DashboardPage) para refrescar su lista
   // única de números tras una mutación (conectar/desconectar/ocultar/registrar).
@@ -230,6 +235,62 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
       .then(({ res, data }) => { if (res.ok && data.ok) setStats(data) })
       .catch(() => {})
       .finally(() => setStatsCargando(false))
+  }
+
+  // Códigos QR del número (message_qrdls de Meta). Se piden al abrir la
+  // pestaña, no al seleccionar el número: son una llamada más a Meta y casi
+  // nadie entra ahí en cada visita.
+  const cargarQrs = (n) => {
+    setQrs([])
+    setQrConfirmando('')
+    if (n.estado !== 'activo') return
+    setQrCargando(true)
+    apiFetch(`/api/whatsapp/numeros/${n.id}/qr/`)
+      .then(({ res, data }) => { if (res.ok) setQrs(data.codigos || []) })
+      .catch(() => {})
+      .finally(() => setQrCargando(false))
+  }
+
+  const crearQr = async (n) => {
+    const mensaje = qrMensaje.trim()
+    if (!mensaje) return
+    setQrGuardando(true)
+    setError('')
+    setAviso('')
+    try {
+      const { res, data } = await apiFetch(`/api/whatsapp/numeros/${n.id}/qr/`, {
+        method: 'POST',
+        body: JSON.stringify({ mensaje }),
+      })
+      if (res.ok) {
+        setQrs((prev) => [...prev, { codigo: data.codigo, mensaje: data.mensaje, enlace: data.enlace, imagen: data.imagen }])
+        setQrMensaje('')
+        setAviso(tn.qr.avisoCreado)
+      } else {
+        setError(data?.error || tn.qr.errCrear)
+      }
+    } catch {
+      setError(tn.errConexion)
+    } finally {
+      setQrGuardando(false)
+    }
+  }
+
+  const eliminarQr = async (n, codigo) => {
+    setQrConfirmando('')
+    setError('')
+    setAviso('')
+    try {
+      const { res, data } = await apiFetch(`/api/whatsapp/numeros/${n.id}/qr/${codigo}/`, { method: 'DELETE' })
+      if (res.ok) {
+        setQrs((prev) => prev.filter((q) => q.codigo !== codigo))
+        setAviso(tn.qr.avisoEliminado)
+      } else {
+        setError(data?.error || tn.qr.errEliminar)
+      }
+    } catch {
+      setError(tn.errConexion)
+    }
   }
 
   // En gestión, autoseleccionar el primer número cuando cargue (si no hay uno)
@@ -520,6 +581,15 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
                 {tn.nombreAyuda}
                 {stats?.name_status && ` · ${tn.nombreEstados?.[stats.name_status] || stats.name_status}`}
               </p>
+              {/* Cambio de nombre en curso: `new_name_status` es el estado del
+                  nombre SOLICITADO, no del vigente. Sin esto el negocio cree
+                  que el cambio no se guardó cuando en realidad está en cola. */}
+              {stats?.new_name_status && !['NONE', 'APPROVED'].includes(stats.new_name_status) && (
+                <p className="flex items-start gap-1 text-[11px] text-purple mt-1">
+                  <Icon name="hourglass_empty" className="text-[13px] leading-none mt-px shrink-0" />
+                  {tn.nombrePendiente(tn.nombreEstados?.[stats.new_name_status] || stats.new_name_status)}
+                </p>
+              )}
             </div>
 
             <div>
@@ -912,6 +982,7 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
     const tabs = [
       { id: 'info', icon: 'info', label: tn.tabInfo },
       { id: 'perfil', icon: 'badge', label: tn.tabPerfil },
+      { id: 'qr', icon: 'qr_code_2', label: tn.tabQr },
       { id: 'stats', icon: 'insights', label: tn.tabStats },
     ]
     return (
@@ -986,7 +1057,7 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
           {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => setTabDetalle(t.id)}
+              onClick={() => { setTabDetalle(t.id); if (t.id === 'qr') cargarQrs(n) }}
               className={`flex items-center gap-1.5 px-3 py-2 text-[13px] font-display font-semibold border-b-2 -mb-px transition-colors ${
                 tabDetalle === t.id ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'
               }`}
@@ -1003,6 +1074,92 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
             <div className="flex flex-col items-center justify-center text-center py-16">
               <Icon name="badge" className="text-outline-variant text-[40px] mb-3" />
               <p className="text-[13px] text-on-surface-variant max-w-xs">{tn.perfilSoloActivo}</p>
+            </div>
+          )
+        ) : tabDetalle === 'qr' ? (
+          /* --- Códigos QR con mensaje precargado --- */
+          n.estado !== 'activo' ? (
+            <div className="flex flex-col items-center justify-center text-center py-16">
+              <Icon name="qr_code_2" className="text-outline-variant text-[40px] mb-3" />
+              <p className="text-[13px] text-on-surface-variant max-w-xs">{tn.qr.soloActivo}</p>
+            </div>
+          ) : (
+            <div className="space-y-4 max-w-xl">
+              <p className="text-[12px] text-on-surface-variant leading-relaxed">{tn.qr.intro}</p>
+
+              <div>
+                <label className={label}>{tn.qr.labelMensaje}</label>
+                <div className="flex items-start gap-2">
+                  <textarea
+                    className={`${campo} min-h-16 resize-y`}
+                    maxLength={1000}
+                    placeholder={tn.qr.phMensaje}
+                    value={qrMensaje}
+                    onChange={(e) => setQrMensaje(e.target.value)}
+                  />
+                  <button
+                    onClick={() => crearQr(n)}
+                    disabled={qrGuardando || !qrMensaje.trim()}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-40"
+                  >
+                    <Icon name="add" className="text-[15px] leading-none" />
+                    {qrGuardando ? tn.guardando : tn.qr.crear}
+                  </button>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-1">{tn.qr.ayudaMensaje}</p>
+              </div>
+
+              {qrCargando ? (
+                <p className="text-[13px] text-on-surface-variant py-6 text-center">{tn.cargando}</p>
+              ) : qrs.length === 0 ? (
+                <p className="text-[13px] text-on-surface-variant py-6 text-center">{tn.qr.vacio}</p>
+              ) : (
+                <div className="space-y-2">
+                  {qrs.map((q) => (
+                    <div key={q.codigo} className="flex items-start gap-3 rounded-xl bg-surface-container-lowest dark:bg-surface-container-high/40 px-4 py-3">
+                      {q.imagen ? (
+                        <img src={q.imagen} alt={tn.qr.imagenAlt} className="w-16 h-16 rounded-lg bg-white object-contain shrink-0" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg bg-surface-container-high/50 flex items-center justify-center shrink-0">
+                          <Icon name="qr_code_2" className="text-on-surface-variant text-[24px] leading-none" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] text-on-surface leading-snug line-clamp-2">{q.mensaje}</p>
+                        {q.enlace && (
+                          <a href={q.enlace} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[12px] text-primary hover:underline mt-1">
+                            <Icon name="link" className="text-[13px] leading-none" />
+                            {q.enlace}
+                          </a>
+                        )}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-1.5">
+                        {q.imagen && (
+                          <a href={q.imagen} target="_blank" rel="noreferrer" title={tn.qr.descargar}
+                            className="p-1.5 text-on-surface-variant hover:text-on-surface transition-colors">
+                            <Icon name="download" className="text-[16px] leading-none" />
+                          </a>
+                        )}
+                        {qrConfirmando === q.codigo ? (
+                          <>
+                            <button onClick={() => eliminarQr(n, q.codigo)}
+                              className="text-[12px] font-display font-semibold text-error hover:opacity-80 px-1">{tn.eliminarSi}</button>
+                            <button onClick={() => setQrConfirmando('')}
+                              className="text-[12px] font-display text-on-surface-variant hover:text-on-surface px-1">{tn.cancelar}</button>
+                          </>
+                        ) : (
+                          <button onClick={() => { setQrConfirmando(q.codigo); setError(''); setAviso('') }}
+                            title={tn.eliminar}
+                            className="p-1.5 text-on-surface-variant hover:text-error transition-colors">
+                            <Icon name="delete" className="text-[16px] leading-none" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         ) : tabDetalle === 'stats' ? (

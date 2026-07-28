@@ -19,13 +19,25 @@ function previewMensaje(msg, tc) {
   return `[${tc.tipoMensaje[msg.tipo_mensaje] || msg.tipo_mensaje}]`
 }
 
+// Emojis del selector rápido de reacciones (los mismos que ofrece WhatsApp).
+const EMOJIS_REACCION = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+
+// "Sucursal Centro: 19.4326,-99.1332" o "19.4326,-99.1332" → sus partes.
+// Es el formato con el que se guardan las ubicaciones en los dos sentidos.
+function parsearUbicacion(contenido) {
+  const bruto = (contenido || '').trim()
+  const corte = bruto.lastIndexOf(':')
+  const coords = (corte === -1 ? bruto : bruto.slice(corte + 1)).trim()
+  const [lat, lon] = coords.split(',').map((n) => n.trim())
+  if (!lat || !lon || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return null
+  return { etiqueta: corte === -1 ? '' : bruto.slice(0, corte).trim(), lat, lon }
+}
+
 // Cita del mensaje al que se responde (Meta lo manda en context.id y el
 // backend lo guarda en wa_contexto_id). `citado` viene undefined cuando el
 // original quedó fuera de la página de mensajes cargada.
-function MensajeCitado({ citado, nombreCliente, esReaccion, tc }) {
-  const autor = esReaccion
-    ? tc.citaReaccion
-    : !citado
+function MensajeCitado({ citado, nombreCliente, tc }) {
+  const autor = !citado
     ? ''
     : citado.tipo_remitente === 'cliente'
     ? nombreCliente
@@ -84,10 +96,11 @@ function motivoFallo(msg, tc) {
 
 export default function VistaConversacion({
   conversacion, onEnviar, onEnviarMedia, onTyping, cargando,
-  onEditarLead, leadPanelAbierto,
-  // Plantillas e interactivos se arman en el panel derecho (lo monta
-  // ConversacionesPanel); aquí solo van los botones que lo abren.
-  onAbrirPlantilla, onAbrirInteractivo, panelActivo,
+  onEditarLead, leadPanelAbierto, onReaccionar,
+  bloqueado = false, onAlternarBloqueo,
+  // Plantillas, interactivos y ubicación se arman en el panel derecho (lo
+  // monta ConversacionesPanel); aquí solo van los botones que lo abren.
+  onAbrirPlantilla, onAbrirInteractivo, onAbrirUbicacion, onAbrirFormulario, panelActivo,
 }) {
   const { lang, t } = useLang()
   const tc = t.chats
@@ -96,14 +109,74 @@ export default function VistaConversacion({
   const [enviando, setEnviando] = useState(false)
   const [enviandoArchivo, setEnviandoArchivo] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState('')
+  const [cambiandoBloqueo, setCambiandoBloqueo] = useState(false)
+  // Guarda el id de la conversación cuya confirmación de bloqueo está abierta,
+  // no un booleano: así cambiar de chat la descarta sola, sin un efecto.
+  const [confirmaBloqueoDe, setConfirmaBloqueoDe] = useState('')
   // Los errores salen como notificación arriba a la derecha
   useErrorToast(errorEnvio, setErrorEnvio)
   const scrollRef = useRef(null)
   const fileRef = useRef(null)
   const typingRef = useRef(0)
 
-  const mensajes = conversacion?.mensajes || []
   const nombreCliente = conversacion?.apodo || conversacion?.cliente_nombre || tc.sinNombre
+
+  // Una reacción NO es una burbuja: WhatsApp la pinta pegada al mensaje al que
+  // apunta. Se sacan de la lista y se indexan por mensaje objetivo. Cada
+  // remitente tiene UNA reacción vigente: la última gana, y un emoji vacío
+  // significa que la quitó.
+  const { mensajes, reaccionesPorWamid } = useMemo(() => {
+    const visibles = []
+    const vigentes = new Map() // `${objetivo}|${remitente}` -> emoji
+    for (const msg of conversacion?.mensajes || []) {
+      // Una reacción nunca va al hilo, ni siquiera si no sabemos a qué mensaje
+      // apunta: sin wa_contexto_id caería como burbuja de texto con un emoji
+      // suelto, que es justo lo que no debe verse.
+      if (msg.tipo_mensaje === 'reaccion') {
+        if (msg.wa_contexto_id) {
+          vigentes.set(`${msg.wa_contexto_id}|${msg.tipo_remitente}`, msg.contenido || '')
+        }
+        continue
+      }
+      visibles.push(msg)
+    }
+    const porObjetivo = new Map()
+    for (const [clave, emoji] of vigentes) {
+      if (!emoji) continue
+      const [objetivo, remitente] = clave.split('|')
+      const lista = porObjetivo.get(objetivo) || []
+      lista.push({ emoji, propia: remitente !== 'cliente' })
+      porObjetivo.set(objetivo, lista)
+    }
+    return { mensajes: visibles, reaccionesPorWamid: porObjetivo }
+  }, [conversacion?.mensajes])
+
+  // Emoji con el que ya reaccionó el negocio a un mensaje (para poder quitarlo
+  // tocándolo de nuevo, como en WhatsApp).
+  const miReaccion = (waMensajeId) =>
+    (reaccionesPorWamid.get(waMensajeId) || []).find((r) => r.propia)?.emoji || ''
+
+  const confirmandoBloqueo = Boolean(conversacion?.id) && confirmaBloqueoDe === conversacion.id
+
+  // Bloquear pide confirmación (se deja de recibir al cliente); desbloquear no.
+  const alternarBloqueo = async () => {
+    if (!bloqueado && !confirmandoBloqueo) {
+      setConfirmaBloqueoDe(conversacion.id)
+      return
+    }
+    setConfirmaBloqueoDe('')
+    setCambiandoBloqueo(true)
+    const r = await onAlternarBloqueo()
+    if (!r?.ok) setErrorEnvio(r?.error || tc.errorBloqueo)
+    setCambiandoBloqueo(false)
+  }
+
+  const reaccionar = async (waMensajeId, emoji) => {
+    if (!onReaccionar || !waMensajeId) return
+    // Tocar el mismo emoji lo quita.
+    const r = await onReaccionar(waMensajeId, miReaccion(waMensajeId) === emoji ? '' : emoji)
+    if (!r?.ok) setErrorEnvio(r?.error || tc.errorReaccion)
+  }
 
   // Índice wamid -> mensaje, para resolver las citas (wa_contexto_id).
   // Depende de conversacion?.mensajes (referencia estable) y no de `mensajes`,
@@ -248,6 +321,45 @@ export default function VistaConversacion({
               }`}>
                 {tc.estadoConversacion[conversacion.estado] || conversacion.estado}
               </span>
+              {bloqueado && (
+                <span className="text-[11px] font-display font-semibold px-2 py-0.5 rounded-full bg-error/15 text-error">
+                  {tc.bloqueado}
+                </span>
+              )}
+              {/* Bloquear/desbloquear al contacto en Meta: deja de llegar su
+                  spam sin tener que borrar la conversación. */}
+              {onAlternarBloqueo && (
+                confirmandoBloqueo ? (
+                  <span className="ml-0.5 flex items-center gap-1">
+                    <button
+                      onClick={alternarBloqueo}
+                      disabled={cambiandoBloqueo}
+                      className="text-[11px] font-display font-semibold px-2 py-0.5 rounded-full bg-error text-on-error disabled:opacity-40"
+                    >
+                      {tc.bloquear}
+                    </button>
+                    <button
+                      onClick={() => setConfirmaBloqueoDe('')}
+                      aria-label={tc.cancelar}
+                      className="p-1 text-on-surface-variant hover:text-on-surface transition-colors"
+                    >
+                      <Icon name="close" className="text-[16px] leading-none" />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={alternarBloqueo}
+                    disabled={cambiandoBloqueo}
+                    title={bloqueado ? tc.desbloquear : tc.bloquear}
+                    aria-label={bloqueado ? tc.desbloquear : tc.bloquear}
+                    className={`ml-0.5 p-1 transition-colors disabled:opacity-40 ${
+                      bloqueado ? 'text-error' : 'text-on-surface-variant hover:text-error'
+                    }`}
+                  >
+                    <Icon name={bloqueado ? 'lock_open' : 'block'} className="text-[18px] leading-none" />
+                  </button>
+                )
+              )}
               {/* Abrir/cerrar el panel del lead. Antes era una lengüeta flotante
                   que solo aparecía al pasar el mouse; ahora vive fija aquí. */}
               {onEditarLead && (
@@ -277,13 +389,35 @@ export default function VistaConversacion({
             key={msg.id}
             className={`flex ${msg.tipo_remitente === 'cliente' ? 'justify-start' : 'justify-end'}`}
           >
-            <div className={`max-w-[75%] flex flex-col ${msg.tipo_remitente === 'cliente' ? 'items-start' : 'items-end'}`}>
+            <div className={`group relative max-w-[75%] flex flex-col ${msg.tipo_remitente === 'cliente' ? 'items-start' : 'items-end'}`}>
+            {/* Selector rápido de reacciones: aparece al pasar el mouse, del
+                lado contrario al remitente para no tapar la burbuja. */}
+            {onReaccionar && msg.wa_mensaje_id && (
+              <div
+                className={`absolute -top-3.5 z-20 hidden group-hover:flex items-center gap-1 px-2 py-1 rounded-full bg-surface-container-lowest shadow-lg ring-1 ring-outline-variant ${
+                  msg.tipo_remitente === 'cliente' ? 'left-2' : 'right-2'
+                }`}
+              >
+                {EMOJIS_REACCION.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    title={miReaccion(msg.wa_mensaje_id) === emoji ? tc.quitarReaccion : tc.reaccionar}
+                    onClick={() => reaccionar(msg.wa_mensaje_id, emoji)}
+                    className={`w-7 h-7 flex items-center justify-center text-[18px] leading-none rounded-full transition-transform hover:scale-125 ${
+                      miReaccion(msg.wa_mensaje_id) === emoji ? 'bg-primary/20' : ''
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className={`px-2.5 py-1.5 rounded-lg shadow-sm ${BURBUJA[msg.tipo_remitente] || BURBUJA.bot}`}>
               {msg.wa_contexto_id && (
                 <MensajeCitado
                   citado={porWamid.get(msg.wa_contexto_id)}
                   nombreCliente={nombreCliente}
-                  esReaccion={msg.tipo_mensaje === 'reaccion'}
                   tc={tc}
                 />
               )}
@@ -313,7 +447,29 @@ export default function VistaConversacion({
                   <span className="text-[13px] underline">{tc.abrirDocumento}</span>
                 </a>
               )}
-              {msg.contenido ? (
+              {/* Ubicación: en vez del texto crudo "nombre: lat,lon", un
+                  enlace al mapa con el nombre del lugar. */}
+              {msg.tipo_mensaje === 'ubicacion' && parsearUbicacion(msg.contenido) ? (
+                (() => {
+                  const loc = parsearUbicacion(msg.contenido)
+                  return (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lon}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 hover:opacity-80"
+                    >
+                      <Icon name="location_on" className="text-[20px] leading-none shrink-0" />
+                      <span className="min-w-0">
+                        {loc.etiqueta && (
+                          <span className="block text-[13px] font-display font-semibold truncate">{loc.etiqueta}</span>
+                        )}
+                        <span className="block text-[12px] underline">{tc.verEnMapa}</span>
+                      </span>
+                    </a>
+                  )
+                })()
+              ) : msg.contenido ? (
                 acciones(msg).texto && (
                   <p className="text-[13px] leading-[1.6] whitespace-pre-wrap">{acciones(msg).texto}</p>
                 )
@@ -337,6 +493,28 @@ export default function VistaConversacion({
                 tituloLista={acciones(msg).tituloLista}
               />
             </div>
+
+            {/* Reacciones colgando de la esquina inferior de la burbuja, como
+                en WhatsApp. La propia se puede tocar para quitarla. */}
+            {(reaccionesPorWamid.get(msg.wa_mensaje_id) || []).length > 0 && (
+              <div className="flex items-center gap-0.5 -mt-1.5 px-1.5 py-0.5 rounded-full bg-surface-container-lowest shadow-sm border border-outline-variant/40">
+                {(reaccionesPorWamid.get(msg.wa_mensaje_id) || []).map((r, i) => (
+                  r.propia && onReaccionar ? (
+                    <button
+                      key={`${r.emoji}-${i}`}
+                      type="button"
+                      title={tc.quitarReaccion}
+                      onClick={() => reaccionar(msg.wa_mensaje_id, r.emoji)}
+                      className="text-[13px] leading-none hover:opacity-70 transition-opacity"
+                    >
+                      {r.emoji}
+                    </button>
+                  ) : (
+                    <span key={`${r.emoji}-${i}`} className="text-[13px] leading-none">{r.emoji}</span>
+                  )
+                ))}
+              </div>
+            )}
 
             {/* Causa del fallo de entrega, DEBAJO de la burbuja (legible) */}
             {motivoFallo(msg, tc) && (
@@ -395,6 +573,31 @@ export default function VistaConversacion({
             }`}
           >
             <Icon name="ballot" className="text-[18px]" />
+          </button>
+          {/* Formularios de Aliwa: agendar, cobrar, facturar. Van tras un "+"
+              porque son la puerta a varias acciones, no una sola. */}
+          <button
+            onClick={onAbrirFormulario}
+            title={tc.enviarFormularioTitle}
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all shrink-0 ${
+              panelActivo === 'formulario'
+                ? 'text-primary bg-primary/5'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
+            }`}
+          >
+            <Icon name="add_circle" className="text-[18px]" />
+          </button>
+          {/* Ubicación (el mapa dentro del chat) */}
+          <button
+            onClick={onAbrirUbicacion}
+            title={tc.enviarUbicacionTitle}
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all shrink-0 ${
+              panelActivo === 'ubicacion'
+                ? 'text-primary bg-primary/5'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50'
+            }`}
+          >
+            <Icon name="location_on" className="text-[18px]" />
           </button>
           {/* Plantilla aprobada (fuera de la ventana de 24h) */}
           <button
