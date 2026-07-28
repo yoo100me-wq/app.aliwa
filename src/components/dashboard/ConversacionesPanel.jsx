@@ -259,7 +259,8 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
     }
   }
 
-  // Enviar un formulario (Flow) publicado
+  // Enviar un formulario (Flow). El payload trae `modo`: 'draft' si el flow
+  // sigue sin publicar, 'published' si ya lo está.
   const enviarFormulario = async (payload) => {
     if (!conversacionActiva) return { ok: false }
     const id = conversacionActiva.id

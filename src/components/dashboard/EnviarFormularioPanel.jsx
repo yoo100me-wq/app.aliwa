@@ -37,6 +37,8 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
   const [personalizando, setPersonalizando] = useState(false)
   const [flowId, setFlowId] = useState('')
   const [clave, setClave] = useState('')
+  // Se arrastra al modo redacción para no perder si el flow está sin publicar.
+  const [esBorrador, setEsBorrador] = useState(false)
   const [encabezado, setEncabezado] = useState('')
   const [cuerpo, setCuerpo] = useState('')
   const [pie, setPie] = useState('')
@@ -51,8 +53,15 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
     apiFetch('/api/whatsapp/flows/')
       .then(({ res, data }) => {
         if (!vigente || !res.ok) return
-        // Un borrador no se puede enviar: Meta lo rechaza.
-        setFormularios((data.formularios || []).filter((f) => f.estado === 'PUBLISHED'))
+        // Se listan también los BORRADORES: Meta sí los deja enviar, pero hay
+        // que pedírselo con mode='draft' (si no, los rechaza). El celular les
+        // pinta un banner de "borrador" y la respuesta llega igual. Mientras
+        // publicar siga bloqueado, este es el único camino para probarlos.
+        setFormularios(
+          (data.formularios || []).filter(
+            (f) => f.estado === 'PUBLISHED' || f.estado === 'DRAFT',
+          ),
+        )
       })
       .catch(() => {})
       .finally(() => { if (vigente) setCargando(false) })
@@ -79,6 +88,7 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
       cuerpo: c.mensaje.cuerpo,
       pie: c.mensaje.pie,
       cta: c.mensaje.cta,
+      modo: c.flow.estado === 'DRAFT' ? 'draft' : 'published',
     })
     if (r?.ok) onClose()
     else {
@@ -97,6 +107,7 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
       cuerpo: cuerpo.trim(),
       pie: pie.trim(),
       cta: cta.trim(),
+      modo: esBorrador ? 'draft' : 'published',
     })
     if (r?.ok) onClose()
     else {
@@ -110,6 +121,7 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
     setPersonalizando(true)
     setFlowId(c.flow.id)
     setClave(c.clave)
+    setEsBorrador(c.flow.estado === 'DRAFT')
     setEncabezado(c.mensaje.encabezado)
     setCuerpo(c.mensaje.cuerpo)
     setPie(c.mensaje.pie)
@@ -124,7 +136,12 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
     try {
       const { res, data } = await apiFetch(`/api/whatsapp/flows/estandar/${c.clave}/`, { method: 'POST' })
       if (res.ok && data?.id) {
-        setFormularios((prev) => [...prev, { id: data.id, nombre: c.clave, estado: 'PUBLISHED' }])
+        // El backend devuelve el estado REAL: si el publish lo rechazó, viene
+        // 'DRAFT'. Darlo por publicado hacía que la tarjeta mintiera.
+        setFormularios((prev) => [
+          ...prev,
+          { id: data.id, nombre: c.clave, estado: data.estado || 'DRAFT' },
+        ])
       } else {
         setError(data?.error || tfo.errActivar)
       }
@@ -220,6 +237,7 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
                 const disponible = Boolean(c.flow)
                 const activable = !disponible && Boolean(c.activable)
                 const mandando = enviando === c.clave
+                const borrador = c.flow?.estado === 'DRAFT'
 
                 return (
                   <div
@@ -231,10 +249,22 @@ export default function EnviarFormularioPanel({ onEnviar, onClose }) {
                     <div className="flex items-start gap-2.5">
                       <Icon name={c.icono} className="text-[18px] leading-none mt-0.5 shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-display font-semibold">{c.nombre}</p>
+                        <p className="text-[13px] font-display font-semibold flex items-center gap-1.5">
+                          {c.nombre}
+                          {borrador && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant border border-outline-variant rounded px-1 py-px">
+                              Borrador
+                            </span>
+                          )}
+                        </p>
                         <p className="text-[11px] text-on-surface-variant leading-snug">
                           {disponible ? c.desc : tfo.noConfigurado}
                         </p>
+                        {borrador && (
+                          <p className="text-[10px] text-on-surface-variant leading-snug mt-0.5">
+                            Sin publicar: se envía en modo prueba y el cliente verá un aviso.
+                          </p>
+                        )}
                       </div>
                       {activable && (
                         <button
