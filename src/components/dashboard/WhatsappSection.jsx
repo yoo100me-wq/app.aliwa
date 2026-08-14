@@ -122,8 +122,9 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
     } catch (e) {
       // 'cancel' es el usuario cerrando el popup: no es error, no se avisa.
       const m = e?.message || ''
-      if (m === 'cancel') {
-        // nada
+      if (m.startsWith('cancel')) {
+        // Cerrar el popup no es un error. El paso donde abandonó viaja en el
+        // mensaje ('cancel:<PASO>') y ya quedó en el diagnóstico del servidor.
       } else if (m === 'timeout') {
         // Caso típico: la pantalla del QR de coexistencia, que solo avanza
         // cuando el cliente lo escanea desde su app de WhatsApp Business.

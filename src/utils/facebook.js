@@ -101,20 +101,47 @@ export async function launchWhatsAppSignup() {
     let coexistencia = false
     let terminado = false
 
+    // ---- Traza de diagnóstico -------------------------------------------
+    // El popup corre en el navegador del cliente: cuando falla, el motivo
+    // queda en SU consola y nunca llega al servidor. Se registra todo lo que
+    // manda Meta y se sube al backend al terminar, pase lo que pase.
+    const inicio = Date.now()
+    const traza = []
+    const anotar = (evento, datos) => {
+      traza.push({ t: Date.now() - inicio, evento, datos })
+      console.log(`[EmbeddedSignup] ${evento}`, datos ?? '')
+    }
+    anotar('inicio', { config_id: config.config_id })
+
+    const reportar = (resultado) => {
+      try {
+        apiFetch('/api/whatsapp/diagnostico/', {
+          method: 'POST',
+          body: JSON.stringify({
+            resultado,
+            eventos: traza,
+            navegador: navigator.userAgent,
+          }),
+        }).catch(() => {})
+      } catch { /* el diagnóstico jamás debe romper el flujo */ }
+    }
+
     // Un solo punto de salida: garantiza que el listener y el temporizador se
     // limpien SIEMPRE. Antes solo se quitaban en el callback de FB.login y en
     // CANCEL, así que un flujo colgado dejaba el listener vivo y los reintentos
     // apilaban uno nuevo cada vez.
-    const finalizar = (fn, valor) => {
+    const finalizar = (fn, valor, resultado) => {
       if (terminado) return
       terminado = true
       clearTimeout(temporizador)
       window.removeEventListener('message', messageHandler)
+      anotar(`fin:${resultado}`, null)
+      reportar(resultado)
       fn(valor)
     }
 
     const temporizador = setTimeout(
-      () => finalizar(reject, new Error('timeout')),
+      () => finalizar(reject, new Error('timeout'), 'timeout'),
       TIMEOUT_MS,
     )
 
@@ -126,6 +153,10 @@ export async function launchWhatsAppSignup() {
       try {
         const data = JSON.parse(event.data)
         if (data.type !== 'WA_EMBEDDED_SIGNUP') return
+
+        // TODO evento de Meta queda en la traza, incluidos los intermedios y
+        // los que no conozcamos: es la única forma de ver dónde se atora.
+        anotar(data.event || '(sin evento)', data.data)
 
         if (data.event === 'FINISH') {
           signupData = data.data
@@ -139,7 +170,10 @@ export async function launchWhatsAppSignup() {
         } else if (data.event === 'FINISH_ONLY_WABA') {
           signupData = { waba_id: data.data?.waba_id }
         } else if (data.event === 'CANCEL') {
-          finalizar(reject, new Error('cancel'))
+          // `current_step` dice en QUÉ PANTALLA abandonó el cliente. Es el
+          // dato más útil del flujo y antes se descartaba.
+          const paso = data.data?.current_step || 'desconocido'
+          finalizar(reject, new Error(`cancel:${paso}`), `cancel:${paso}`)
         } else if (data.event === 'ERROR') {
           // Meta avisa aquí por qué falló el flujo. Antes este evento no se
           // atendía: el mensaje llegaba, se descartaba, y la promesa quedaba
@@ -149,7 +183,7 @@ export async function launchWhatsAppSignup() {
             || data.data?.error_id
             || 'error desconocido de Meta'
           console.error('[EmbeddedSignup] Meta reportó ERROR:', data)
-          finalizar(reject, new Error(`meta: ${detalle}`))
+          finalizar(reject, new Error(`meta: ${detalle}`), `error:${detalle}`)
         }
       } catch {
         // No es un mensaje de Facebook
@@ -160,6 +194,14 @@ export async function launchWhatsAppSignup() {
 
     window.FB.login(
       function (response) {
+        // El `code` es canjeable por tokens: se anota SI llegó, nunca su valor.
+        anotar('fb_login_callback', {
+          hay_authResponse: !!response?.authResponse,
+          hay_code: !!response?.authResponse?.code,
+          status: response?.status || null,
+          waba_id: signupData.waba_id || null,
+          coexistencia,
+        })
         if (response?.authResponse) {
           finalizar(resolve, {
             code: response.authResponse.code,
@@ -169,9 +211,9 @@ export async function launchWhatsAppSignup() {
             wabaId: signupData.waba_id || null,
             phoneNumberId: signupData.phone_number_id || null,
             coexistencia,
-          })
+          }, coexistencia ? 'ok:coexistencia' : 'ok')
         } else {
-          finalizar(reject, new Error('cancel'))
+          finalizar(reject, new Error('cancel'), 'cancel:sin_authResponse')
         }
       },
       {
