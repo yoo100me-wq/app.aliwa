@@ -20,8 +20,32 @@ const ENDPOINTS_PUBLICOS = [
   '/api/auth/enviar-codigo/',
   '/api/auth/verificar-codigo/',
   '/api/auth/confirmar-invitacion/',
+  '/api/auth/refresh/',
   '/api/interesados/',
 ]
+
+// --- Renovación de sesión ---------------------------------------------------
+// El JWT de Supabase vive 1 hora. Sin esto, a la hora exacta el usuario quedaba
+// en un panel que se veía normal pero donde toda petición fallaba: perdió una
+// conexión de WhatsApp completa por esto (el popup de Meta terminaba bien y el
+// POST final rebotaba). Ante un 401 se intenta refrescar UNA vez y se reintenta.
+let refrescando = null
+
+function refrescarSesion() {
+  // Una sola petición de refresco aunque 8 llamadas fallen a la vez: todas
+  // esperan la misma promesa en lugar de quemar 8 refresh tokens rotados.
+  if (!refrescando) {
+    refrescando = fetch(`${API_URL}/api/auth/refresh/`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-Aliwa-Client': '1' },
+    })
+      .then((r) => r.ok)
+      .catch(() => false)
+      .finally(() => { refrescando = null })
+  }
+  return refrescando
+}
 
 // Rutas del SPA que no requieren sesión (para no redirigir en bucle).
 const RUTAS_PUBLICAS = ['/login', '/registro', '/confirmar-invitacion', '/openpay-callback', '/en']
@@ -67,7 +91,16 @@ export async function apiFetch(endpoint, options = {}) {
     },
   }
 
-  const res = await fetch(`${API_URL}${endpoint}`, config)
+  let res = await fetch(`${API_URL}${endpoint}`, config)
+
+  // Sesión vencida: renovar con la cookie de refresco y reintentar una vez.
+  // Solo una: si el reintento vuelve a dar 401, la sesión murió de verdad.
+  if (res.status === 401 && !ENDPOINTS_PUBLICOS.some((p) => endpoint.startsWith(p))) {
+    if (await refrescarSesion()) {
+      res = await fetch(`${API_URL}${endpoint}`, config)
+    }
+  }
+
   redirigirSiNoAutorizado(endpoint, res)
   const data = await res.json().catch(() => ({}))
 
@@ -79,12 +112,16 @@ export async function apiFetch(endpoint, options = {}) {
  * (el navegador pone el boundary de multipart) y conserva el header CSRF.
  */
 export async function apiUpload(endpoint, formData) {
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  const enviar = () => fetch(`${API_URL}${endpoint}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'X-Aliwa-Client': '1', ...headerNegocio() },
     body: formData,
   })
+
+  let res = await enviar()
+  if (res.status === 401 && await refrescarSesion()) res = await enviar()
+
   redirigirSiNoAutorizado(endpoint, res)
   const data = await res.json().catch(() => ({}))
   return { res, data }
