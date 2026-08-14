@@ -146,17 +146,6 @@ export default function LoginPage() {
               {loading ? tl.loading : tl.submit}
             </button>
           </form>
-
-          <p className="text-center mt-10 text-[13px] text-on-surface-variant">
-            {tl.noAccount}{' '}
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event('open-waitlist'))}
-              className="text-primary font-display font-semibold hover:underline"
-            >
-              {tl.startFree}
-            </button>
-          </p>
         </div>
       </div>
 
