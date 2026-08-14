@@ -100,6 +100,9 @@ export async function launchWhatsAppSignup() {
     let signupData = {}
     let coexistencia = false
     let terminado = false
+    // Motivo registrado por un CANCEL/ERROR de Meta. NO termina el flujo por sí
+    // solo: el veredicto lo da el callback de FB.login (ver abajo).
+    let motivoFallo = null
 
     // ---- Traza de diagnóstico -------------------------------------------
     // El popup corre en el navegador del cliente: cuando falla, el motivo
@@ -170,20 +173,29 @@ export async function launchWhatsAppSignup() {
         } else if (data.event === 'FINISH_ONLY_WABA') {
           signupData = { waba_id: data.data?.waba_id }
         } else if (data.event === 'CANCEL') {
-          // `current_step` dice en QUÉ PANTALLA abandonó el cliente. Es el
-          // dato más útil del flujo y antes se descartaba.
-          const paso = data.data?.current_step || 'desconocido'
-          finalizar(reject, new Error(`cancel:${paso}`), `cancel:${paso}`)
+          // OJO: un CANCEL de Meta NO significa que el alta fracasó.
+          // Observado en producción: en coexistencia Meta manda CANCEL en el
+          // paso del teléfono y ACTO SEGUIDO el callback de FB.login entrega un
+          // `code` válido con status "connected" — el número queda vinculado
+          // (la app del negocio ya dice "conectado a Aliwa"). Terminar aquí
+          // tiraba ese code a la basura y jamás se llamaba al backend.
+          // Se anota el motivo y se deja que decida FB.login.
+          motivoFallo = `cancel:${data.data?.current_step || 'desconocido'}`
         } else if (data.event === 'ERROR') {
-          // Meta avisa aquí por qué falló el flujo. Antes este evento no se
-          // atendía: el mensaje llegaba, se descartaba, y la promesa quedaba
-          // colgada — el usuario veía la pantalla congelada y el motivo real
-          // se perdía. Se conserva para poder diagnosticar.
           const detalle = data.data?.error_message
             || data.data?.error_id
             || 'error desconocido de Meta'
           console.error('[EmbeddedSignup] Meta reportó ERROR:', data)
-          finalizar(reject, new Error(`meta: ${detalle}`), `error:${detalle}`)
+          motivoFallo = `meta: ${detalle}`
+        }
+
+        // Si el cliente pasó por cualquier pantalla del onboarding de la app
+        // de WhatsApp Business, esto ES coexistencia — aunque no llegue el
+        // evento FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING. Importa: con la
+        // bandera en false el backend intentaría /register, y registrar un
+        // número de coexistencia lo DESCONECTA de la app del negocio.
+        if (String(data.data?.current_step || '').startsWith('WHATSAPP_BUSINESS_APP_ONBOARDING')) {
+          coexistencia = true
         }
       } catch {
         // No es un mensaje de Facebook
@@ -202,7 +214,11 @@ export async function launchWhatsAppSignup() {
           waba_id: signupData.waba_id || null,
           coexistencia,
         })
-        if (response?.authResponse) {
+        // ESTE callback es la fuente de verdad, no los eventos de mensaje.
+        // Si trae un `code`, hay algo que canjear: se manda al backend aunque
+        // Meta haya emitido CANCEL antes. Si el WABA no existiera de verdad,
+        // el backend lo dirá con un error claro — mejor eso que no intentarlo.
+        if (response?.authResponse?.code) {
           finalizar(resolve, {
             code: response.authResponse.code,
             sessionData: signupData,
@@ -211,9 +227,11 @@ export async function launchWhatsAppSignup() {
             wabaId: signupData.waba_id || null,
             phoneNumberId: signupData.phone_number_id || null,
             coexistencia,
-          }, coexistencia ? 'ok:coexistencia' : 'ok')
+          }, motivoFallo ? `ok_tras_${motivoFallo}` : (coexistencia ? 'ok:coexistencia' : 'ok'))
         } else {
-          finalizar(reject, new Error('cancel'), 'cancel:sin_authResponse')
+          // Sin code no hay nada que hacer: ahí sí fue cancelación real.
+          const motivo = motivoFallo || 'cancel'
+          finalizar(reject, new Error(motivo), motivo)
         }
       },
       {
