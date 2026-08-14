@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { apiFetch } from '../../utils/api'
+import { apiFetch, apiUpload } from '../../utils/api'
 import { LADAS, telefonoConLada } from '../../utils/ladas'
 import Icon from '../shared/Icon'
 import { useLang } from '../../i18n-app'
@@ -125,6 +125,91 @@ function ModalAgregar({ onGuardar, onClose }) {
   )
 }
 
+// Importación de agenda (.vcf). Dos tiempos: primero una PREVIA que no escribe
+// nada (el backend responde el resumen), y solo si el usuario confirma se crea.
+// Así nadie mete 150 contactos sin saber qué traía el archivo.
+function ImportarModal({ tc, onClose, onListo, setError }) {
+  const [archivo, setArchivo] = useState(null)
+  const [previa, setPrevia] = useState(null)
+  const [cargando, setCargando] = useState(false)
+
+  const analizar = async (file) => {
+    setArchivo(file)
+    setPrevia(null)
+    setCargando(true)
+    const fd = new FormData()
+    fd.append('archivo', file)
+    fd.append('previa', '1')
+    const { res, data } = await apiUpload('/api/contactos/importar/', fd)
+    setCargando(false)
+    if (res.ok) setPrevia(data)
+    else setError(data?.error || tc.importarError)
+  }
+
+  const confirmar = async () => {
+    setCargando(true)
+    const fd = new FormData()
+    fd.append('archivo', archivo)
+    const { res, data } = await apiUpload('/api/contactos/importar/', fd)
+    setCargando(false)
+    if (res.ok) onListo(data)
+    else setError(data?.error || tc.importarError)
+  }
+
+  const fila = (etiqueta, valor, fuerte) => (
+    <div className="flex items-center justify-between py-1.5">
+      <span className="text-[13px] text-on-surface-variant">{etiqueta}</span>
+      <span className={`text-[13px] font-display ${fuerte ? 'font-bold text-primary' : ''}`}>{valor}</span>
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 bg-neutral/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="border border-outline-variant bg-surface-container rounded-2xl p-5 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-display font-bold text-[15px] mb-2">{tc.importarTitulo}</h3>
+        <p className="text-[13px] leading-[1.6] text-on-surface-variant mb-4">{tc.importarAyuda}</p>
+
+        {!previa && (
+          <label className="flex items-center justify-center gap-2 h-11 border border-dashed border-outline-variant rounded-lg cursor-pointer text-[13px] font-display font-semibold text-on-surface-variant hover:border-primary hover:text-primary transition-all">
+            <Icon name="upload_file" className="text-[18px] leading-none" />
+            {cargando ? tc.importarAnalizando : (archivo?.name || tc.importarElegir)}
+            <input type="file" accept=".vcf" className="hidden" disabled={cargando}
+              onChange={(e) => e.target.files?.[0] && analizar(e.target.files[0])} />
+          </label>
+        )}
+
+        {previa && (
+          <div className="rounded-lg bg-surface-container-high/40 px-3 py-2">
+            <p className="text-[11px] font-display font-semibold uppercase tracking-wide text-on-surface-variant mb-1">
+              {tc.importarResumen}
+            </p>
+            {fila(tc.importarLeidos, previa.telefonos_leidos)}
+            {fila(tc.importarUnicos, previa.unicos)}
+            {fila(tc.importarExistian, previa.ya_existian)}
+            {fila(tc.importarNuevos, previa.a_crear, true)}
+            {previa.sin_nombre > 0 && fila(tc.importarSinNombre, previa.sin_nombre)}
+          </div>
+        )}
+
+        {previa?.a_crear === 0 && (
+          <p className="text-[13px] text-on-surface-variant mt-3">{tc.importarNadaNuevo}</p>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-lg text-[13px] font-display font-semibold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-all">
+            {tc.importarCancelar}
+          </button>
+          <button onClick={confirmar} disabled={cargando || !previa || previa.a_crear === 0}
+            className="px-4 py-2 border border-primary text-primary text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:bg-primary/5 disabled:opacity-40">
+            {cargando ? tc.importarImportando : tc.importarConfirmar}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ContactosSection() {
   const { t, lang } = useLang()
   const tc = t.contactos
@@ -140,6 +225,7 @@ export default function ContactosSection() {
   const [busqueda, setBusqueda] = useState('')
   const [agregando, setAgregando] = useState(false)      // modal de empresa
   const [creandoPersona, setCreandoPersona] = useState(false)  // panel lateral
+  const [importando, setImportando] = useState(false)          // modal de .vcf
   // Contacto abierto en el LeadPanel (el mismo panel de edición de chats)
   const [editandoId, setEditandoId] = useState(null)
 
@@ -248,6 +334,15 @@ export default function ContactosSection() {
             onChange={(e) => setBusqueda(e.target.value)}
           />
         </div>
+        {tab === 'personas' && (
+          <button
+            onClick={() => setImportando(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-outline-variant text-on-surface-variant text-[13px] font-display font-semibold transition-all active:scale-[0.98] hover:text-on-surface hover:border-on-surface-variant shrink-0"
+          >
+            <Icon name="upload_file" className="text-[16px] leading-none" />
+            {tc.importar}
+          </button>
+        )}
         <button
           onClick={() => {
             // Persona → panel lateral en modo alta. Empresa → modal.
@@ -393,6 +488,22 @@ export default function ContactosSection() {
           ningún lado. La de PERSONA se hace en el panel lateral (abajo). */}
       {agregando && tab === 'empresas' && (
         <ModalAgregar onGuardar={guardarNuevo} onClose={() => setAgregando(false)} />
+      )}
+
+      {importando && (
+        <ImportarModal
+          tc={tc}
+          setError={setError}
+          onClose={() => setImportando(false)}
+          onListo={() => {
+            setImportando(false)
+            // Recargar en vez de insertar a mano: son decenas de contactos y
+            // el backend ya definió cuáles se crearon.
+            apiFetch('/api/contactos/').then(({ res, data }) => {
+              if (res.ok) setPersonas(data.results || data || [])
+            })
+          }}
+        />
       )}
       </div>
 
