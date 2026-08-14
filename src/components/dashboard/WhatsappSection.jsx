@@ -120,7 +120,22 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
         setError(data?.error || tn.errConectar)
       }
     } catch (e) {
-      if (e.message !== 'cancel') setError(tn.errConectarReintenta)
+      // 'cancel' es el usuario cerrando el popup: no es error, no se avisa.
+      const m = e?.message || ''
+      if (m === 'cancel') {
+        // nada
+      } else if (m === 'timeout') {
+        // Caso típico: la pantalla del QR de coexistencia, que solo avanza
+        // cuando el cliente lo escanea desde su app de WhatsApp Business.
+        setError(tn.errConectarTimeout)
+      } else if (m === 'sdk_timeout') {
+        setError(tn.errConectarSdk)
+      } else if (m.startsWith('meta: ')) {
+        // El motivo que reportó Meta: sirve para soporte, no se traduce.
+        setError(`${tn.errConectarMeta} ${m.slice(6)}`)
+      } else {
+        setError(tn.errConectarReintenta)
+      }
     } finally {
       setConectando(false)
     }
