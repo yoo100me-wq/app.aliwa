@@ -67,8 +67,8 @@ export const translations = {
           ],
         },
         {
-          title: 'Certificados por Openpay by BBVA',
-          desc: 'Cobros con Openpay by BBVA y seguridad bancaria para proteger tus ingresos.',
+          title: 'Certificados por Openpay',
+          desc: 'Cobros con Openpay y seguridad bancaria para proteger tus ingresos.',
           credLabel: 'PCI DSS Nivel 1',
           ribbon: 'En proceso',
           ring: 'OPENPAY BY BBVA · PCI DSS NIVEL 1 · ANTIFRAUDE · PAGOS PROTEGIDOS · ',
@@ -213,6 +213,13 @@ export const translations = {
         { nombre: 'Profesional', precio: '$799', desc: '1 negocio · 3 números WA · 10 usuarios' },
         { nombre: 'Business', precio: '$2,199', desc: '3 negocios · 9 números WA · 30 usuarios' },
       ],
+      // Sustituye a la selección de plan: al registrarse solo se elige para qué
+      // se va a usar la cuenta. El plan se elige al terminar la prueba.
+      typeLabel: '¿Para qué vas a usar Aliwa?',
+      types: [
+        { slug: 'negocio', nombre: 'Mi negocio', desc: 'Atiende, cobra y agenda por WhatsApp', nota: '14 días gratis' },
+        { slug: 'evento', nombre: 'Mi evento', desc: 'Invita, confirma asistencia y mesa de regalos', nota: 'Pagas al enviar' },
+      ],
     },
   },
 
@@ -281,8 +288,8 @@ export const translations = {
           ],
         },
         {
-          title: 'Certified by Openpay by BBVA',
-          desc: 'Payments with Openpay by BBVA and bank-grade security to protect your income.',
+          title: 'Certified by Openpay',
+          desc: 'Payments with Openpay and bank-grade security to protect your income.',
           credLabel: 'PCI DSS Level 1',
           ribbon: 'In progress',
           ring: 'OPENPAY BY BBVA · PCI DSS LEVEL 1 · ANTI-FRAUD · PROTECTED PAYMENTS · ',
@@ -426,6 +433,11 @@ export const translations = {
         { nombre: 'Basic', precio: '$500', desc: '1 business · 1 WA number · 4 users' },
         { nombre: 'Professional', precio: '$799', desc: '1 business · 3 WA numbers · 10 users' },
         { nombre: 'Business', precio: '$2,199', desc: '3 businesses · 9 WA numbers · 30 users' },
+      ],
+      typeLabel: 'What will you use Aliwa for?',
+      types: [
+        { slug: 'negocio', nombre: 'My business', desc: 'Support, charge and book over WhatsApp', nota: '14 days free' },
+        { slug: 'evento', nombre: 'My event', desc: 'Invite, track RSVPs and gift registry', nota: 'Pay when you send' },
       ],
     },
   },

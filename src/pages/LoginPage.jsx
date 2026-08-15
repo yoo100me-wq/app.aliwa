@@ -40,7 +40,10 @@ export default function LoginPage() {
       if (res.ok) {
         // El dashboard hereda el idioma con el que se hizo login
         try { localStorage.setItem('aliwa-lang', lang) } catch { /* sin storage */ }
-        navigate('/dashboard')
+        // Cada tipo de cuenta entra a SU panel: una cuenta de eventos no ve
+        // nada de negocios (y al revés). El guardia de cada página lo vuelve a
+        // verificar contra /api/auth/me/, esto solo evita el rebote visible.
+        navigate(data.usuario?.cuenta_tipo === 'evento' ? '/eventos/dashboard' : '/dashboard')
       } else {
         setError(data.error || tl.errorCredentials)
       }

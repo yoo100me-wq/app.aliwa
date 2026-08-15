@@ -3,11 +3,13 @@ import { useEffect } from 'react'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
+import EventosDashboardPage from './pages/EventosDashboardPage'
 import SetupBusinessPage from './pages/SetupBusinessPage'
 import ConfirmarInvitacionPage from './pages/ConfirmarInvitacionPage'
 import OpenpayCallbackPage from './pages/OpenpayCallbackPage'
 import { LangProvider } from './i18n-app'
 import { ToastProvider } from './components/shared/Toasts'
+import { Agentation } from 'agentation'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -27,6 +29,8 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegisterPage />} />
         <Route path="/dashboard" element={<LangProvider><ToastProvider><DashboardPage /></ToastProvider></LangProvider>} />
+        {/* Aliwa Eventos — panel propio. Cada cuenta ve solo el suyo (cuentas.tipo) */}
+        <Route path="/eventos/dashboard" element={<LangProvider><ToastProvider><EventosDashboardPage /></ToastProvider></LangProvider>} />
         <Route path="/configurar-negocio" element={<SetupBusinessPage />} />
         <Route path="/confirmar-invitacion" element={<ConfirmarInvitacionPage />} />
         <Route path="/openpay-callback" element={<OpenpayCallbackPage />} />
@@ -36,6 +40,7 @@ function App() {
         <Route path="/en/login" element={<LoginPage />} />
         <Route path="/en/registro" element={<RegisterPage />} />
       </Routes>
+      {import.meta.env.DEV && <Agentation />}
     </BrowserRouter>
   )
 }

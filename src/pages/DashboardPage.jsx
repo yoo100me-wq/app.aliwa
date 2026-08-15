@@ -112,7 +112,12 @@ export default function DashboardPage() {
     // /dashboard exige sesión: sin cookie válida, el backend responde 401 →
     // redirigir a login (la ruta no es pública aunque el bundle sí lo sea).
     apiFetch('/api/auth/me/').then(({ res, data }) => {
-      if (res.ok) setUsuario(data)
+      if (res.ok) {
+        // Una cuenta de Aliwa Eventos no ve nada de negocios: se va a su panel
+        // aunque haya escrito /dashboard a mano.
+        if (data.cuenta?.tipo === 'evento') { navigate('/eventos/dashboard', { replace: true }); return }
+        setUsuario(data)
+      }
       else if (res.status === 401 || res.status === 403) navigate('/login', { replace: true })
     }).catch(() => {})
     initFacebookSDK()

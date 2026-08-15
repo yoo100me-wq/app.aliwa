@@ -9,7 +9,7 @@ import { useT, otherLangPath } from '../i18n'
 // Sitio de marketing (landing). El logo lleva de vuelta ahí.
 const MARKETING_URL = 'https://aliwa.mx'
 
-const planSlugs = ['basico', 'profesional', 'business']
+const tipoSlugs = ['negocio', 'evento']
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -22,17 +22,17 @@ export default function RegisterPage() {
   // El logo vuelve a la landing (aliwa.mx), preservando idioma
   const home = isEn ? `${MARKETING_URL}/en` : MARKETING_URL
   const loginPath = lang === 'en' ? '/en/login' : '/login'
-  const planes = planSlugs.map((slug, i) => ({ slug, ...tr.plans[i] }))
   const [searchParams] = useSearchParams()
-  const planParam = searchParams.get('plan')
-  const [step, setStep] = useState(1) // 1: email, 2: codigo, 3: datos + plan
+  // La landing puede traer preseleccionado el tipo (ej. /eventos → ?tipo=evento)
+  const tipoParam = searchParams.get('tipo')
+  const [step, setStep] = useState(1) // 1: email, 2: codigo, 3: datos + tipo
   const [email, setEmail] = useState('')
   const [codigo, setCodigo] = useState('')
   const [nombre, setNombre] = useState('')
   const [apellido, setApellido] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [plan, setPlan] = useState(['basico', 'profesional', 'business'].includes(planParam) ? planParam : 'basico')
+  const [tipo, setTipo] = useState(tipoSlugs.includes(tipoParam) ? tipoParam : 'negocio')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -77,12 +77,12 @@ export default function RegisterPage() {
     try {
       const { res, data } = await apiFetch('/api/auth/registro/', {
         method: 'POST',
-        body: JSON.stringify({ email, codigo, password, nombre, apellido, plan }),
+        body: JSON.stringify({ email, codigo, password, nombre, apellido, tipo }),
       })
       if (res.ok) {
         // El dashboard hereda el idioma con el que se hizo el registro
         try { localStorage.setItem('aliwa-lang', lang) } catch { /* sin storage */ }
-        navigate('/dashboard')
+        navigate(tipo === 'evento' ? '/eventos/dashboard' : '/dashboard')
       } else {
         setError(data.error || tr.errCreate)
       }
@@ -235,18 +235,18 @@ export default function RegisterPage() {
                     className="w-full bg-surface-container-high/50 rounded-2xl px-5 py-3.5 text-sm font-body text-on-surface placeholder:text-outline-variant outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-2 tracking-wide uppercase">{tr.planLabel}</label>
+                  <label className="block text-[11px] font-display font-semibold text-on-surface-variant mb-2 tracking-wide uppercase">{tr.typeLabel}</label>
                   <div className="flex flex-col gap-2">
-                    {planes.map((p) => (
-                      <button key={p.slug} type="button" onClick={() => setPlan(p.slug)}
+                    {tr.types.map((op) => (
+                      <button key={op.slug} type="button" onClick={() => setTipo(op.slug)}
                         className={`w-full text-left px-5 py-3.5 rounded-2xl transition-all ${
-                          plan === p.slug ? 'bg-primary/10 ring-2 ring-primary/30' : 'bg-surface-container hover:bg-surface-container-high'
+                          tipo === op.slug ? 'bg-primary/10 ring-2 ring-primary/30' : 'bg-surface-container hover:bg-surface-container-high'
                         }`}>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-display font-semibold text-on-surface">{p.nombre}</span>
-                          <span className="text-sm font-display font-semibold text-on-surface">{p.precio}<span className="text-on-surface-variant font-normal">{tr.perMonth}</span></span>
+                        <div className="flex justify-between items-center gap-3">
+                          <span className="text-sm font-display font-semibold text-on-surface">{op.nombre}</span>
+                          <span className="text-[11px] font-display font-semibold text-on-surface-variant shrink-0">{op.nota}</span>
                         </div>
-                        <p className="text-xs text-on-surface-variant mt-1">{p.desc}</p>
+                        <p className="text-xs text-on-surface-variant mt-1">{op.desc}</p>
                       </button>
                     ))}
                   </div>
