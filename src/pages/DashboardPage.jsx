@@ -1291,7 +1291,7 @@ export default function DashboardPage() {
 
               {/* Card de usuario + Soporte - solo en dashboard */}
               {activeSection === 'dashboard' && usuario && (
-                <div className="flex gap-3 mb-4">
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
                   {/* Card usuario */}
                   <div className="flex-1 border border-outline-variant bg-surface-container rounded-2xl p-4">
                     <div className="flex items-center gap-3 mb-3">
@@ -1348,7 +1348,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   {/* Card soporte */}
-                  <div className="w-[200px] shrink-0 border border-outline-variant bg-surface-container rounded-2xl p-4 flex flex-col justify-center gap-3">
+                  <div className="w-full sm:w-[200px] sm:shrink-0 border border-outline-variant bg-surface-container rounded-2xl p-4 flex flex-col justify-center gap-3">
                     <div className="flex items-center gap-2.5">
                       <img src="/icons/whatsapp.svg" alt="" className="w-4 h-4" />
                       <div className="min-w-0">

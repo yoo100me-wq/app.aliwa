@@ -548,9 +548,12 @@ export default function PlantillasSection() {
 
   return (
     <>
-      <div className="flex h-full">
+      {/* Móvil: lista y detalle apilados (300px + detalle no caben en un
+          teléfono). La lista se acota para que el detalle quede a la vista sin
+          tener que recorrer toda la lista primero. md+: dos columnas. */}
+      <div className="flex flex-col md:flex-row h-full">
         {/* IZQUIERDA: lista de tarjetas */}
-        <aside className="w-[300px] shrink-0 bg-surface-container-lowest border-r border-outline-variant flex flex-col overflow-hidden">
+        <aside className="w-full md:w-[300px] md:shrink-0 max-h-[45vh] md:max-h-none bg-surface-container-lowest border-b md:border-b-0 md:border-r border-outline-variant flex flex-col overflow-hidden">
           <div className="flex items-center px-3 h-11 shrink-0">
             <h3 className="font-display font-bold text-[15px] truncate">{tp.titulo}</h3>
           </div>

@@ -1402,9 +1402,10 @@ export default function WhatsappSection({ onConectado, onSiguiente, onCambio, ge
   if (gestion) {
     const selNum = numeros.find((n) => n.id === seleccionadoId) || null
     return (
-      <div className="flex h-full">
+      // Móvil: lista y detalle apilados; md+: dos columnas (ver PlantillasSection).
+      <div className="flex flex-col md:flex-row h-full">
         {/* IZQUIERDA: lista de números */}
-        <aside className="w-[300px] shrink-0 bg-surface-container-lowest border-r border-outline-variant flex flex-col overflow-hidden">
+        <aside className="w-full md:w-[300px] md:shrink-0 max-h-[45vh] md:max-h-none bg-surface-container-lowest border-b md:border-b-0 md:border-r border-outline-variant flex flex-col overflow-hidden">
           <div className="flex items-center px-3 h-11 shrink-0">
             <h3 className="font-display font-bold text-[15px] truncate">{tn.tituloNumeros}</h3>
           </div>

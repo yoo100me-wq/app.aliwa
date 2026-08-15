@@ -305,8 +305,10 @@ export default function ContactosSection() {
   return (
     <div className="flex h-full min-w-0">
       <div className="flex-1 flex flex-col min-w-0">
-      {/* Header: título + tabs + buscador */}
-      <div className="flex items-center gap-4 px-4 h-11 shrink-0">
+      {/* Header: título + tabs + buscador. En móvil se envuelve en varias
+          líneas (título, tabs, buscador y botones no caben en 390px) y por eso
+          la altura es automática ahí; desde md vuelve a la barra de h-11. */}
+      <div className="flex flex-wrap md:flex-nowrap items-center gap-x-4 gap-y-2 px-4 py-2 md:py-0 md:h-11 shrink-0">
         <h3 className="font-display font-bold text-[15px]">{tc.titulo}</h3>
         <div className="flex items-center gap-1">
           {[['personas', tc.tabPersonas, personas.length], ['empresas', tc.tabEmpresas, empresas.length]].map(([id, label, n]) => (
@@ -324,8 +326,8 @@ export default function ContactosSection() {
             </button>
           ))}
         </div>
-        <div className="flex-1" />
-        <div className="relative w-64">
+        <div className="hidden md:block flex-1" />
+        <div className="relative w-full md:w-64 order-last md:order-none">
           <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-outline-variant leading-none" />
           <input
             className="w-full bg-surface-container-lowest dark:bg-surface-container-high/40 rounded-lg pl-8 pr-3 py-1.5 text-[13px] font-body text-on-surface placeholder:text-outline-variant outline-none"

@@ -102,6 +102,8 @@ export default function VistaConversacion({
   // Plantillas, interactivos y ubicación se arman en el panel derecho (lo
   // monta ConversacionesPanel); aquí solo van los botones que lo abren.
   onAbrirPlantilla, onAbrirInteractivo, onAbrirUbicacion, onAbrirFormulario, panelActivo,
+  // Solo en móvil: regresa a la lista de conversaciones (ver la cabecera).
+  onVolver,
 }) {
   const { lang, t } = useLang()
   const tc = t.chats
@@ -290,7 +292,18 @@ export default function VistaConversacion({
         // Barra superior: mismo fondo que las bandejas, no el lienzo del chat,
         // para que el encabezado se lea como parte del panel.
         return (
-          <div className="flex items-center gap-3 px-5 py-4 bg-surface-container-lowest border-b border-outline-variant/20">
+          <div className="flex items-center gap-3 px-3 md:px-5 py-3 md:py-4 bg-surface-container-lowest border-b border-outline-variant/20">
+            {/* En móvil la lista y el chat NO caben juntos: se ve uno a la vez
+                y esta flecha regresa a la lista. En md+ ambos conviven y sobra. */}
+            {onVolver && (
+              <button
+                onClick={onVolver}
+                aria-label={tc.volver || 'Volver'}
+                className="md:hidden -ml-1 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/50 transition-all shrink-0"
+              >
+                <Icon name="arrow_back" className="text-[20px] leading-none" />
+              </button>
+            )}
             {conversacion.cliente_foto ? (
               <img src={conversacion.cliente_foto} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
             ) : (

@@ -9,9 +9,14 @@ import Icon from '../shared/Icon'
 // layout dejaba la conversación demasiado angosta mientras armas el mensaje.
 export default function PanelLateral({ titulo, onClose, children, flotante = false }) {
   return (
+    // En móvil un panel de 300px no cabe junto al chat: se monta a pantalla
+    // completa encima. Desde md vuelve a ser la columna (o el flotante) de
+    // siempre. `sm:` no sirve aquí: el corte real es donde ya caben chat+panel.
     <div
-      className={`w-[300px] bg-surface-container-lowest border-l border-outline-variant flex flex-col overflow-hidden ${
-        flotante ? 'absolute inset-y-0 right-0 z-20 shadow-xl' : 'shrink-0'
+      className={`bg-surface-container-lowest border-outline-variant flex flex-col overflow-hidden
+        absolute inset-0 z-30 md:relative md:inset-auto md:z-auto
+        md:w-[300px] md:border-l ${
+        flotante ? 'md:absolute md:inset-y-0 md:right-0 md:z-20 md:shadow-xl' : 'md:shrink-0'
       }`}
     >
       <div className="flex items-center justify-between gap-2 px-4 h-11 shrink-0">

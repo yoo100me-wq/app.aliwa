@@ -326,10 +326,19 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
     )
   }
 
+  // Maestro-detalle: 176 + 264 px de columnas fijas no caben en un teléfono de
+  // ~390 px, y con `shrink-0` no se encogían — el chat quedaba sin ancho. Ahora
+  // en móvil se ve UNA columna a la vez (lista o chat), en tablet dos (lista +
+  // chat) y en escritorio las tres de siempre.
+  const enChat = !!conversacionActiva
+
   return (
-    <div className="flex h-full">
-      {/* Contenedor de filtros (asignación) */}
-      <div className="w-[176px] shrink-0 bg-surface-container-lowest border-r border-outline-variant overflow-hidden">
+    // `relative`: los paneles que en móvil se montan a pantalla completa
+    // (lead, plantillas) se posicionan contra este contenedor.
+    <div className="relative flex h-full">
+      {/* Contenedor de filtros (asignación) — solo escritorio: es la columna
+          más prescindible y la lista ya trae búsqueda y filtro de lectura. */}
+      <div className="hidden lg:block w-[176px] shrink-0 bg-surface-container-lowest border-r border-outline-variant overflow-hidden">
         <FiltrosConversaciones
           filtroActivo={filtroAsignacion}
           onCambiar={setFiltroAsignacion}
@@ -340,8 +349,8 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
         />
       </div>
 
-      {/* Contenedor de lista */}
-      <div className="w-[264px] shrink-0 bg-surface-container-lowest border-r border-outline-variant overflow-hidden">
+      {/* Contenedor de lista — ancho completo en móvil, columna fija en md+ */}
+      <div className={`${enChat ? 'hidden md:block' : 'block'} w-full md:w-[264px] md:shrink-0 bg-surface-container-lowest border-r border-outline-variant overflow-hidden`}>
         <ListaConversaciones
           conversaciones={conversaciones}
           conversacionActivaId={conversacionActiva?.id}
@@ -362,7 +371,7 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
           notificaciones está abierto (el layout se auto-ajusta) */}
       {/* Lienzo del chat: token propio, porque la escala de superficies se
           invierte en oscuro y dejaba un gris medio más claro que los paneles. */}
-      <div className="relative flex-1 min-w-0 bg-lienzo-chat overflow-hidden">
+      <div className={`${enChat ? 'block' : 'hidden md:block'} relative flex-1 min-w-0 bg-lienzo-chat overflow-hidden`}>
         <VistaConversacion
           conversacion={conversacionActiva}
           onEnviar={enviarMensaje}
@@ -382,6 +391,7 @@ export default function ConversacionesPanel({ usuarioId, numeros = [], numerosCa
           onAbrirFormulario={() => setPanelDerecho((p) => (p === 'formulario' ? null : 'formulario'))}
           bloqueado={bloqueado}
           onAlternarBloqueo={alternarBloqueo}
+          onVolver={() => { setConversacionActiva(null); setPanelDerecho(null) }}
         />
 
         {/* Plantillas e interactivos FLOTAN sobre el chat: son de paso, y

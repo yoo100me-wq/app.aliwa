@@ -135,7 +135,9 @@ export default function LeadPanel({ prospectoId, onClose, onSaved, conCerrar = f
   }
 
   return (
-    <div className="w-[300px] shrink-0 bg-surface-container-lowest border-l border-outline-variant flex flex-col overflow-hidden">
+    // Móvil: cubre la pantalla (300px junto al chat no caben en un teléfono).
+    // md+: la columna de siempre, para trabajar el lead en paralelo al chat.
+    <div className="absolute inset-0 z-30 md:relative md:inset-auto md:z-auto md:w-[300px] md:shrink-0 bg-surface-container-lowest md:border-l border-outline-variant flex flex-col overflow-hidden">
       {/* Header — guardar en el lugar donde estaba la x */}
       <div className="flex items-center justify-between gap-2 px-4 h-11 shrink-0">
         <h2 className="font-display font-bold text-[15px] truncate min-w-0">
