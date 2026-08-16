@@ -56,6 +56,10 @@ export const es = {
     agregarNegocio: 'Agregar negocio',
   },
   topbar: { configuracion: 'Configuración', suscripcion: 'Suscripción', dashboard: 'Dashboard' },
+  // Selector de panel: solo se muestra en cuentas de tipo 'ambos'
+  selectorModo: { negocio: 'Negocio', eventos: 'Eventos' },
+  // Área que encabeza el breadcrumb, para saber siempre en qué panel estás
+  area: 'Negocio',
   bienvenida: (nombre) => `Bienvenida, ${nombre}!`,
   setup: {
     titulo: 'Configura tu negocio',
@@ -239,6 +243,8 @@ export const en = {
     agregarNegocio: 'Add business',
   },
   topbar: { configuracion: 'Settings', suscripcion: 'Subscription', dashboard: 'Dashboard' },
+  selectorModo: { negocio: 'Business', eventos: 'Events' },
+  area: 'Business',
   bienvenida: (nombre) => `Welcome, ${nombre}!`,
   setup: {
     titulo: 'Set up your business',

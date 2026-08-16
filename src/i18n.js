@@ -219,6 +219,7 @@ export const translations = {
       types: [
         { slug: 'negocio', nombre: 'Mi negocio', desc: 'Atiende, cobra y agenda por WhatsApp', nota: '14 días gratis' },
         { slug: 'evento', nombre: 'Mi evento', desc: 'Invita, confirma asistencia y mesa de regalos', nota: 'Pagas al enviar' },
+        { slug: 'ambos', nombre: 'Los dos', desc: 'Negocio y eventos, con selector para cambiar de panel', nota: '14 días gratis' },
       ],
     },
   },
@@ -438,6 +439,7 @@ export const translations = {
       types: [
         { slug: 'negocio', nombre: 'My business', desc: 'Support, charge and book over WhatsApp', nota: '14 days free' },
         { slug: 'evento', nombre: 'My event', desc: 'Invite, track RSVPs and gift registry', nota: 'Pay when you send' },
+        { slug: 'ambos', nombre: 'Both', desc: 'Business and events, with a switcher between panels', nota: '14 days free' },
       ],
     },
   },

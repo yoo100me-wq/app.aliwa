@@ -11,6 +11,8 @@ import ContactosSection from '../components/dashboard/ContactosSection'
 import WhatsappSection from '../components/dashboard/WhatsappSection'
 import OpenpaySection from '../components/dashboard/OpenpaySection'
 import SuscripcionCheckout from '../components/dashboard/SuscripcionCheckout'
+import SelectorModo from '../components/dashboard/SelectorModo'
+import PanelNotificaciones from '../components/dashboard/PanelNotificaciones'
 import { apiFetch, NEGOCIO_STORAGE_KEY } from '../utils/api'
 import { initFacebookSDK } from '../utils/facebook'
 import { useLang } from '../i18n-app'
@@ -113,8 +115,9 @@ export default function DashboardPage() {
     // redirigir a login (la ruta no es pública aunque el bundle sí lo sea).
     apiFetch('/api/auth/me/').then(({ res, data }) => {
       if (res.ok) {
-        // Una cuenta de Aliwa Eventos no ve nada de negocios: se va a su panel
-        // aunque haya escrito /dashboard a mano.
+        // Una cuenta de Aliwa Eventos PURO no ve nada de negocios: se va a su
+        // panel aunque haya escrito /dashboard a mano. 'ambos' sí se queda —
+        // para eso trae el selector en la barra superior.
         if (data.cuenta?.tipo === 'evento') { navigate('/eventos/dashboard', { replace: true }); return }
         setUsuario(data)
       }
@@ -394,7 +397,7 @@ export default function DashboardPage() {
         {/* Sidebar */}
         <aside className={`fixed inset-y-0 left-0 z-40 bg-surface-container border-r border-outline-variant flex flex-col transition-all duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        } ${collapsed ? 'w-[64px]' : 'w-44'}`}>
+        } ${collapsed ? 'w-[64px]' : 'w-48'}`}>
 
           {/* Logo — misma altura (h-11) que el top bar; su línea inferior
               continúa la línea del dashboard de borde a borde */}
@@ -414,7 +417,7 @@ export default function DashboardPage() {
                     key={group.id}
                     onClick={() => handleNav(group.id)}
                     title={collapsed ? td.menu[group.id] : undefined}
-                    className={`w-full flex items-center gap-2 py-1 text-[13px] font-display transition-colors mb-px ${
+                    className={`w-full flex items-center gap-2 py-1 text-[13px] font-display whitespace-nowrap transition-colors mb-px ${
                       collapsed ? 'justify-center px-0' : 'px-2.5'
                     } ${
                       activeSection === group.id
@@ -442,7 +445,7 @@ export default function DashboardPage() {
                         key={item.id}
                         onClick={() => handleNav(item.id)}
                         title={collapsed ? td.menu[item.id] : undefined}
-                        className={`w-full flex items-center gap-2 py-1 text-[13px] font-display transition-colors ${
+                        className={`w-full flex items-center gap-2 py-1 text-[13px] font-display whitespace-nowrap transition-colors ${
                           collapsed ? 'justify-center px-0' : 'px-2.5'
                         } ${
                           activeSection === item.id
@@ -551,7 +554,7 @@ export default function DashboardPage() {
                         <div className="text-[13px] font-display font-semibold truncate">{negocioActivo?.nombre || td.sidebar.miNegocio}</div>
                         <div className="text-[12px] text-on-surface-variant truncate">{negocioActivo?.giro || td.sidebar.sinConfigurar}</div>
                       </div>
-                      <Icon name="unfold_more" className="text-on-surface-variant text-[16px] shrink-0" />
+                      <Icon name="expand_more" className="text-on-surface-variant text-[16px] shrink-0" />
                     </div>
                   )}
                 </button>
@@ -561,7 +564,7 @@ export default function DashboardPage() {
               {negocioMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setNegocioMenuOpen(false)} />
-                  <div className={`fixed bottom-3 z-50 w-72 bg-surface-container-high border border-outline-variant rounded-xl overflow-hidden shadow-xl ${collapsed ? 'left-[70px]' : 'left-[182px]'}`}>
+                  <div className={`fixed bottom-3 z-50 w-72 bg-surface-container-high border border-outline-variant rounded-xl overflow-hidden shadow-xl ${collapsed ? 'left-[70px]' : 'left-[198px]'}`}>
                     <div className="p-1.5 space-y-0.5 max-h-[50vh] overflow-y-auto">
                       {negocios.map((n) => {
                         const activo = negocioActivo?.id === n.id
@@ -609,7 +612,7 @@ export default function DashboardPage() {
             hover:bg-primary/10 hover:text-primary
             transition-all duration-300
             items-center justify-center
-            ${collapsed ? 'left-[64px]' : 'left-[176px]'}`}
+            ${collapsed ? 'left-[64px]' : 'left-[192px]'}`}
         >
           <Icon name={collapsed ? 'chevron_right' : 'chevron_left'} className="text-[16px]" />
         </button>
@@ -622,7 +625,7 @@ export default function DashboardPage() {
 
       {/* Main — margen izquierdo dinámico */}
       <main className={`flex-1 flex flex-col h-screen transition-all duration-300 ${
-        collapsed ? 'lg:ml-[64px]' : 'lg:ml-44'
+        collapsed ? 'lg:ml-[64px]' : 'lg:ml-48'
       }`}>
         {/* Top bar */}
         <header className="relative flex items-center h-11 bg-surface-container-low px-4 md:px-6 gap-4 shrink-0">
@@ -636,6 +639,10 @@ export default function DashboardPage() {
           </button>
 
           <div className="flex-1 hidden lg:flex items-center gap-1.5 text-sm font-display text-on-surface-variant">
+            {/* El área SIEMPRE va primero, en cualquier tipo de cuenta: mirando
+                solo "Chats" no se sabe si estás en negocio o en eventos. */}
+            <span>{td.area}</span>
+            <span className="text-outline-variant">/</span>
             {(() => {
               if (activeSection === 'settings') {
                 const tabLabel = {
@@ -659,6 +666,12 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Selector de panel — solo si la cuenta trae los dos lados */}
+            {usuario?.cuenta?.tipo === 'ambos' && (
+              <div className="mr-2">
+                <SelectorModo modo="negocio" labels={td.selectorModo} />
+              </div>
+            )}
             {/* Idioma — junto a notificaciones */}
             <button
               onClick={toggleLang}
@@ -710,7 +723,10 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* Gestión de usuarios */}
+                  {/* Gestión de usuarios — NO aplica a cuentas de solo eventos:
+                      un evento no tiene equipo con permisos por módulo de
+                      negocio. Se muestra en 'negocio' y en 'ambos'. */}
+                  {usuario?.cuenta?.tipo !== 'evento' && (
                   <div>
                     <p className="text-[11px] font-display font-semibold text-on-surface-variant tracking-wide uppercase mb-1 px-2">{td.panel.gestionUsuarios}</p>
                     <div className="space-y-px">
@@ -728,6 +744,7 @@ export default function DashboardPage() {
                       </button>
                     </div>
                   </div>
+                  )}
 
                   {/* Seguridad */}
                   <div>
@@ -1491,46 +1508,13 @@ export default function DashboardPage() {
 
           {/* Panel lateral derecho — exclusivo para notificaciones */}
           {panelActivo === 'notificaciones' && (
-            <aside className="w-52 shrink-0 border-l border-outline-variant bg-surface-container flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="px-2.5 h-11 flex items-center shrink-0">
-                <h3 className="font-display font-bold text-[15px]">{td.panel.notificaciones}</h3>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-2 pb-3">
-
-                {/* Notificaciones */}
-                {(
-                  notifLoading ? (
-                    <div className="py-10 text-center text-[13px] text-on-surface-variant">{td.panel.cargando}</div>
-                  ) : notificaciones.length === 0 ? (
-                    <div className="py-10 text-center">
-                      <Icon name="notifications_none" className="text-outline-variant text-[28px] mb-1.5" />
-                      <p className="text-[13px] text-on-surface-variant">{td.panel.sinNotificaciones}</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-px">
-                      {notificaciones.map((n) => (
-                        <button
-                          key={n.id}
-                          onClick={() => !n.leida && marcarLeida(n.id)}
-                          className={`w-full text-left px-2 py-1.5 transition-colors ${!n.leida ? 'bg-primary/3 hover:bg-primary/5 cursor-pointer' : 'bg-surface-container-lowest'}`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <Icon name={n.icono || 'info'} className={`text-[15px] mt-0.5 shrink-0 leading-none ${!n.leida ? 'text-selected' : 'text-on-surface-variant'}`} />
-                            <div className="min-w-0">
-                              <p className={`text-[13px] font-display leading-tight ${!n.leida ? 'font-bold text-selected' : 'font-medium text-on-surface-variant'}`}>{n.titulo}</p>
-                              <p className="text-[12px] text-on-surface-variant mt-0.5 leading-relaxed">{n.mensaje}</p>
-                              <p className="text-[11px] text-outline mt-1">{new Date(n.creada).toLocaleDateString(localeFecha, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )
-                )}
-              </div>
-            </aside>
+            <PanelNotificaciones
+              notificaciones={notificaciones}
+              loading={notifLoading}
+              onMarcarLeida={marcarLeida}
+              localeFecha={localeFecha}
+              labels={td.panel}
+            />
           )}
         </div>
       </main>

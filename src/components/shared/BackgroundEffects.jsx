@@ -1,8 +1,13 @@
 export function GradientBlob({ color = 'purple', size = 400, top, left, right, bottom, opacity = 0.07 }) {
   const colors = {
+    // OJO: 'purple' NO es morado, es gris. Se conserva el valor para no
+    // cambiar las pantallas que ya lo usan, pero para morado real usa 'accent'.
     purple: '#8a8a8f',
     blue: '#3f3f44',
     accent: '#6C36FF',
+    // Lima de la marca (el color de la W del icono). Al ser un tono claro
+    // necesita más opacidad que los otros para leerse sobre fondo claro.
+    green: '#D1FF94',
   }
 
   const style = {
