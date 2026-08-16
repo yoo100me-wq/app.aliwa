@@ -14,10 +14,11 @@ import { apiFetch } from '../utils/api'
 import { useLang } from '../i18n-app'
 import SelectorModo from '../components/dashboard/SelectorModo'
 import PanelNotificaciones from '../components/dashboard/PanelNotificaciones'
-import { iniciales } from '../utils/iniciales'
 import AvatarEvento from '../components/dashboard/AvatarEvento'
 import { GradientBlob } from '../components/shared/BackgroundEffects'
 import EditorInvitacion from '../components/eventos/EditorInvitacion'
+import InvitadosSection from '../components/eventos/InvitadosSection'
+import FormularioFlow from '../components/eventos/FormularioFlow'
 
 // Sidebar plano: solo las cinco secciones de primer nivel. Lo que antes eran
 // subitems ahora vive como PESTAÑAS dentro de su contenedor — Confirmados y
@@ -25,18 +26,16 @@ import EditorInvitacion from '../components/eventos/EditorInvitacion'
 // Solo ids/iconos: los labels salen de t.eventos.menu
 const menuItems = [
   { id: 'dashboard', icon: 'widgets' },
-  { id: 'invitation-builder', icon: 'mail', tabs: ['invitation-builder', 'rsvp-form'] },
-  { id: 'guests', icon: 'group', tabs: ['guests', 'confirmed', 'survey-results', 'import-export'] },
+  { id: 'invitation-builder', icon: 'mail' },
+  // Confirmados e Importar/Exportar se quitaron: el estado ya es una columna
+  // de la tabla y la importación un botón, no destinos aparte.
+  { id: 'guests', icon: 'group', tabs: ['guests', 'rsvp-form', 'survey-results'] },
   { id: 'gift-registry', icon: 'redeem' },
   { id: 'wishlist', icon: 'favorite' },
 ]
 
-// Para resolver a qué sección de primer nivel pertenece una pestaña.
 // Evento seleccionado, persistido igual que NEGOCIO_STORAGE_KEY del otro panel.
 const EVENTO_KEY = 'aliwa-evento'
-
-const seccionDePestana = (tab) =>
-  menuItems.find((m) => m.id === tab || m.tabs?.includes(tab))?.id || 'dashboard'
 
 export default function EventosDashboardPage() {
   const navigate = useNavigate()
@@ -55,7 +54,11 @@ export default function EventosDashboardPage() {
   const [usuario, setUsuario] = useState(null)
   const [notifNoLeidas, setNotifNoLeidas] = useState(0)
   const [notificaciones, setNotificaciones] = useState([])
-  const [notifLoading, setNotifLoading] = useState(false)
+  // Arranca en true si el panel viene abierto: su contenido se pide en el
+  // mismo montaje, y fijarlo dentro del efecto sería un setState en su cuerpo.
+  const [notifLoading, setNotifLoading] = useState(
+    () => localStorage.getItem('aliwa-panel-notif') === '1'
+  )
   // Misma preferencia persistida que el panel de negocio: si dejaste abierto el
   // panel de notificaciones, sigue abierto al cambiar de dashboard.
   const [panelActivo, setPanelActivo] = useState(() =>
@@ -156,7 +159,6 @@ export default function EventosDashboardPage() {
     // hay que traer su contenido aqui. Si no, se pinta vacio hasta que el
     // usuario lo cierra y lo abre otra vez.
     if (localStorage.getItem('aliwa-panel-notif') === '1') {
-      setNotifLoading(true)
       apiFetch('/api/notificaciones/').then(({ res, data }) => {
         if (res.ok) setNotificaciones(data.results || data || [])
       }).catch(() => setNotificaciones([])).finally(() => setNotifLoading(false))
@@ -1056,6 +1058,41 @@ export default function EventosDashboardPage() {
                   </div>
                 )
               })()}
+            </div>
+          ) : activeTab === 'rsvp-form' ? (
+            <div>
+              <h1 className="text-[18px] font-display font-bold text-on-surface">
+                {te.paginas['rsvp-form'].title}
+              </h1>
+              <p className="text-[13px] font-body text-on-surface-variant mt-1">
+                {te.paginas['rsvp-form'].description}
+              </p>
+              {eventoActivo ? (
+                // `key` para que al cambiar de evento el componente se remonte
+                // con sus preguntas, en vez de sincronizarlas con un efecto.
+                <FormularioFlow
+                  key={eventoActivo.id}
+                  evento={eventoActivo}
+                  onGuardado={(ev) => {
+                    setEventoActivo(ev)
+                    setEventos((prev) => prev.map((e) => (e.id === ev.id ? ev : e)))
+                  }}
+                />
+              ) : (
+                <p className="text-[13px] text-on-surface-variant mt-4">{te.panelInicio.sinEventoDesc}</p>
+              )}
+            </div>
+          ) : activeTab === 'guests' ? (
+            <div>
+              <h1 className="text-[18px] font-display font-bold text-on-surface">
+                {te.menu.guests}
+              </h1>
+              <p className="text-[13px] font-body text-on-surface-variant mt-1">
+                {current?.description}
+              </p>
+              {eventoActivo
+                ? <InvitadosSection evento={eventoActivo} />
+                : <p className="text-[13px] text-on-surface-variant mt-4">{te.panelInicio.sinEventoDesc}</p>}
             </div>
           ) : activeTab === 'invitation-builder' ? (
             // El editor manda su propia altura: necesita la ventana completa

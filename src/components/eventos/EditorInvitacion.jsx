@@ -74,8 +74,10 @@ export default function EditorInvitacion({ evento, onGuardado }) {
   // `null` = ajustar solo al panel. Un número = la anfitriona fijó el zoom.
   const [zoom, setZoom] = useState(null)
   const [publicando, setPublicando] = useState(false)
-  const [urlPublica, setUrlPublica] = useState(evento?.invitacion_url || '')
-  const [publicada, setPublicada] = useState(!!evento?.publicada)
+  const [urlRecien, setUrlRecien] = useState('')
+  const [publicoRecien, setPublicoRecien] = useState(false)
+  const urlPublica = urlRecien || evento?.invitacion_url || ''
+  const publicada = publicoRecien || !!evento?.publicada
   const [avisoPub, setAvisoPub] = useState('')
 
   // Reiniciar la previa: remonta el iframe (via `key`) y limpia lo que solo
@@ -200,7 +202,9 @@ export default function EditorInvitacion({ evento, onGuardado }) {
     bloques: inv.bloques.map(({ tipo, datos, visible }) => ({ tipo, datos, visible })),
   })
 
-  const publicar = async () => {
+  const [confirmaNueva, setConfirmaNueva] = useState(false)
+
+  const publicar = async (regenerar = false) => {
     setPublicando(true)
     setAvisoPub('')
     try {
@@ -212,15 +216,18 @@ export default function EditorInvitacion({ evento, onGuardado }) {
       if (!g.res.ok) { setAvisoPub(g.data?.error || 'No se pudo guardar'); return }
       onGuardado?.(g.data)
 
-      const { res, data } = await apiFetch(`/api/eventos/${evento.id}/publicar/`, { method: 'POST' })
+      const { res, data } = await apiFetch(`/api/eventos/${evento.id}/publicar/`, {
+        method: 'POST', body: JSON.stringify({ regenerar }),
+      })
       if (!res.ok) {
         setAvisoPub(res.status === 402
           ? 'Falta cubrir el pago para publicar'
           : (data?.error || 'No se pudo publicar'))
         return
       }
-      setUrlPublica(data.url)
-      setPublicada(true)
+      setUrlRecien(data.url)
+      setPublicoRecien(true)
+      setConfirmaNueva(false)
     } catch {
       setAvisoPub('Error de conexión')
     } finally {
@@ -257,17 +264,49 @@ export default function EditorInvitacion({ evento, onGuardado }) {
 
           {/* Publicar prende la URL pública. No compila ni sube archivos: el
               renderizador ya está en línea y solo empieza a servir este token. */}
-          <button onClick={publicar} disabled={publicando}
-            title={publicada ? 'Volver a publicar con los cambios' : 'Publicar la invitación'}
-            className="ml-auto mb-1 shrink-0 flex items-center gap-1 border border-tertiary text-tertiary px-2.5 h-[26px] font-display font-semibold text-[12px] transition-all active:scale-[0.98] hover:bg-tertiary/5 disabled:opacity-50">
-            <Icon name={publicada ? 'cloud_done' : 'cloud_upload'} className="text-[14px] leading-none" />
-            {publicando ? 'Subiendo…' : publicada ? 'Actualizar' : 'Terminar'}
-          </button>
+          <div className="ml-auto mb-1 shrink-0 flex items-center gap-1.5">
+            <button onClick={() => publicar(false)} disabled={publicando}
+              title={publicada
+                ? 'Sube los cambios a la MISMA liga: los enlaces ya enviados siguen sirviendo'
+                : 'Publicar la invitación'}
+              className="flex items-center gap-1 border border-tertiary text-tertiary px-2.5 h-[26px] font-display font-semibold text-[12px] transition-all active:scale-[0.98] hover:bg-tertiary/5 disabled:opacity-50">
+              <Icon name={publicada ? 'cloud_done' : 'cloud_upload'} className="text-[14px] leading-none" />
+              {publicando ? 'Subiendo…' : publicada ? 'Actualizar' : 'Terminar'}
+            </button>
+          </div>
         </div>
 
-        {(urlPublica || avisoPub) && (
-          <div className={`mb-2.5 px-2.5 py-1.5 text-[12px] ${avisoPub ? 'bg-error/10 text-error' : 'bg-tertiary/10'}`}>
-            {avisoPub || (
+        {confirmaNueva && (
+          <div className="mb-2.5 px-2.5 py-2 bg-error/10 text-[12px]">
+            <p className="text-error font-display font-semibold mb-1.5">
+              ¿Generar una liga nueva?
+            </p>
+            <p className="text-on-surface-variant leading-relaxed mb-2">
+              La liga actual dejará de funcionar. Quien ya la haya recibido por
+              WhatsApp no podrá abrirla y habrá que reenviarla.
+            </p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => publicar(true)} disabled={publicando}
+                className="border border-error text-error px-3 h-[26px] font-display font-semibold text-[12px] hover:bg-error/10 transition-colors disabled:opacity-50">
+                Sí, cambiar la liga
+              </button>
+              <button onClick={() => setConfirmaNueva(false)}
+                className="px-2 h-[26px] font-display text-[12px] text-on-surface-variant hover:text-on-surface transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {avisoPub && (
+          <div className="mb-2.5 px-2.5 py-1.5 text-[12px] bg-error/10 text-error">{avisoPub}</div>
+        )}
+
+        {/* Fija mientras exista la liga: es el dato que se copia y se vuelve a
+            copiar, y esconderlo obliga a republicar para verlo. */}
+        {urlPublica && (
+          <div className="mb-2.5 px-2.5 py-1.5 text-[12px] bg-tertiary/10">
+            {(
               <span className="flex items-center gap-2">
                 <Icon name="link" className="text-[15px] leading-none shrink-0 text-tertiary" />
                 <a href={urlPublica} target="_blank" rel="noopener noreferrer"
@@ -278,6 +317,12 @@ export default function EditorInvitacion({ evento, onGuardado }) {
                   title="Copiar la liga"
                   className="shrink-0 p-1 text-on-surface-variant hover:text-tertiary transition-colors">
                   <Icon name="content_copy" className="text-[14px] leading-none" />
+                </button>
+                {/* Cambiar la liga es la EXCEPCIÓN, no parte de actualizar: mata
+                    los enlaces ya enviados. Por eso va aparte y con confirmación. */}
+                <button onClick={() => setConfirmaNueva(true)} title="Generar una liga nueva"
+                  className="shrink-0 p-1 text-on-surface-variant hover:text-error transition-colors">
+                  <Icon name="autorenew" className="text-[14px] leading-none" />
                 </button>
               </span>
             )}
